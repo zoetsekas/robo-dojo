@@ -59,7 +59,11 @@ class RobocodeGymEnv(gym.Env):
         self.use_xvfb = env_config.get("use_xvfb", True)
         self.use_gui = env_config.get("use_gui", False)
         self.use_visual_obs = env_config.get("use_visual_obs", True)  # Vector-only mode if False
+        self.export_tick_data = env_config.get("export_tick_data", False)  # Export tick data to JSON
         self.external_display = os.environ.get("ROBODOJO_DISPLAY")
+        
+        # Tick data collection (for debugging/analysis)
+        self._tick_data = []
 
         
         if self.external_display:
@@ -661,6 +665,7 @@ class RobocodeGymEnv(gym.Env):
         self.episode_count += 1
         self.step_count = 0
         self.total_reward = 0
+        self._tick_data = []  # Clear tick history for new episode
         
         # Reset enemy/combat tracking for new episode
         self.tracked_enemies = [
@@ -862,12 +867,48 @@ class RobocodeGymEnv(gym.Env):
         info["events_processed"] = events_processed
         info["step_time"] = time.time() - start_wait
         
-        # Stop recording if episode ended
-        if done and self.video_capture:
-            self.episode_recorder.on_episode_end(self.video_capture)
+        # Collection and Export logic
+        if self.export_tick_data and tick_event:
+            tick_snapshot = {
+                "step": self.step_count,
+                "reward": accumulated_reward,
+                "total_reward": self.total_reward,
+                "obs": tick_event.get("obs", {}),
+                "tracked_enemies": self.tracked_enemies.copy(),
+                "combat_stats": self.combat_stats.copy()
+            }
+            self._tick_data.append(tick_snapshot)
+
+        # Stop recording and save tick data if episode ended
+        if done:
+            if self.video_capture:
+                self.episode_recorder.on_episode_end(self.video_capture)
+            
+            if self.export_tick_data:
+                self._save_tick_data()
                 
         self.last_event = tick_event
         return self._get_obs(), accumulated_reward, done, truncated, info
+
+    def _save_tick_data(self):
+        """Save collected tick data to disk for analysis."""
+        import json
+        import os
+        
+        save_dir = "artifacts/tick_data"
+        os.makedirs(save_dir, exist_ok=True)
+        
+        filepath = os.path.join(save_dir, f"episode_{self.episode_count}_ticks.json")
+        try:
+            with open(filepath, "w") as f:
+                json.dump({
+                    "episode": self.episode_count,
+                    "total_reward": self.total_reward,
+                    "ticks": self._tick_data
+                }, f, indent=2)
+            logger.debug(f"Saved tick data for episode {self.episode_count} to {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to save tick data: {e}")
 
     def _get_obs(self):
         """Build 37-dimensional observation vector for multi-enemy support.

@@ -2,6 +2,7 @@ name: robocode_multimodal
 use_gui: true
 use_xvfb: true
 use_visual_obs: true  # Set to false for vector-only training (no visual input)
+export_tick_data: false  # Set to true to export tick-by-tick game data to JSON
 record_every_n_episodes: 100
 
 # Opponent settings - "random" selects from opponent_pool each episode

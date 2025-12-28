@@ -141,6 +141,7 @@ class GymBot(Bot):
             logger.info(f"Tick {event.turn_number}: pos=({self.get_x():.1f}, {self.get_y():.1f}), energy={self.get_energy():.1f}")
         
         # Construct observation from bot state (all fields from bot-state.schema.yaml)
+        # Use getattr with defaults for methods that may not exist in older API versions
         obs = {
             "x": self.get_x(),
             "y": self.get_y(),
@@ -149,10 +150,10 @@ class GymBot(Bot):
             "heading": self.get_direction(),
             "gun_heading": self.get_gun_direction(),
             "radar_heading": self.get_radar_direction(),
-            "radar_sweep": self.get_radar_sweep(),  # Angle swept by radar this turn
-            "turn_rate": self.get_turn_rate(),      # Current body turn rate
-            "gun_turn_rate": self.get_gun_turn_rate(),  # Current gun turn rate
-            "radar_turn_rate": self.get_radar_turn_rate(),  # Current radar turn rate
+            "radar_sweep": getattr(self, 'get_radar_sweep', lambda: 0)(),
+            "turn_rate": getattr(self, 'get_turn_rate', lambda: 0)(),
+            "gun_turn_rate": getattr(self, 'get_gun_turn_rate', lambda: 0)(),
+            "radar_turn_rate": getattr(self, 'get_radar_turn_rate', lambda: 0)(),
             "gun_heat": self.get_gun_heat(),
             "enemy_count": self.get_enemy_count(),
             "scanned": []

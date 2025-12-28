@@ -28,22 +28,19 @@ help:
 
 # 1. TRAINING
 train:
-	docker compose up ray-head ray-worker -d --build
+	export TRAIN_ARGS="" && docker compose up ray-head ray-worker -d --build
 
 train-resume:
 	@echo "Resuming training from artifacts/checkpoints/best..."
-	docker compose up ray-head ray-worker -d --build
-	docker compose exec ray-head bash -c "pkill -f 'python -m src.train'; sleep 2; python -m src.train resume=artifacts/checkpoints/best"
+	export TRAIN_ARGS="resume=artifacts/checkpoints/best" && docker compose up ray-head ray-worker -d --build
 
 train-selfplay:
 	@echo "Starting self-play only training..."
-	docker compose up ray-head ray-worker -d --build
-	docker compose exec ray-head bash -c "pkill -f 'python -m src.train'; sleep 2; python -m src.train self_play_only=true"
+	export TRAIN_ARGS="self_play_only=true" && docker compose up ray-head ray-worker -d --build
 
 train-vector:
 	@echo "Starting VECTOR-ONLY training (no visual observations)..."
-	docker compose up ray-head ray-worker -d --build
-	docker compose exec ray-head bash -c "pkill -f 'python -m src.train'; sleep 2; python -m src.train env.use_visual_obs=false"
+	export TRAIN_ARGS="env.use_visual_obs=false" && docker compose up ray-head ray-worker -d --build
 
 # 2. SMOKE TESTS
 smoke-test:
@@ -51,7 +48,7 @@ smoke-test:
 
 smoke-test-vector:
 	@echo "Running smoke test with VECTOR-ONLY observations..."
-	docker compose run --rm smoke-test python -m src.train smoke_test=true env.use_visual_obs=false
+	docker compose up smoke-test-vector --build
 
 # OS-specific venv path
 ifeq ($(OS),Windows_NT)

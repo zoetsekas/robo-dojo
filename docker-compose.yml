@@ -20,11 +20,13 @@ services:
               count: all
               capabilities: [ gpu ]
     # Start head node, then run training with remote workers
+    environment:
+      - TRAIN_ARGS=${TRAIN_ARGS:-}
     command: >
       bash -c "
         ray start --head --port=6379 --dashboard-host=0.0.0.0 --include-dashboard=false --num-cpus 0 --block &
         sleep 15 &&
-        python -m src.train
+        python -m src.train $$TRAIN_ARGS
       "
     ports:
       - "6379:6379"
@@ -93,6 +95,32 @@ services:
     networks:
       - robodojo-net
 
+  # Smoke test (vector-only) - no visual observations, faster
+  smoke-test-vector:
+    build: .
+    image: robodojo
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./src:/app/src
+      - ./tank-royale:/app/tank-royale
+      - ./sample_bots:/app/sample_bots
+      - ./tests:/app/tests
+    shm_size: '4gb'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    command: >
+      bash -c "
+        ray start --head --port=6379 --include-dashboard=false --block &
+        sleep 10 &&
+        python -m src.train smoke_test=true hardware.num_workers=1 env.use_visual_obs=false
+      "
+    networks:
+      - robodojo-net
   # Visual debugging - Connect to XLaunch on host
   visual-smoke-test:
     build: .
