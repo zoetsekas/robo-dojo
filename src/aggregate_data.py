@@ -5,7 +5,12 @@ Combines all JSON game state files into a single training-ready dataset.
 import os
 import json
 import numpy as np
+import logging
 from pathlib import Path
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Aggregate] %(message)s')
+logger = logging.getLogger(__name__)
 
 def aggregate_expert_data(data_dir="artifacts/expert_data", output_file="artifacts/aggregated_expert_data.npz"):
     """
@@ -14,19 +19,19 @@ def aggregate_expert_data(data_dir="artifacts/expert_data", output_file="artifac
     data_dir = Path(data_dir)
     
     if not data_dir.exists():
-        print(f"Data directory {data_dir} does not exist!")
+        logger.error(f"Data directory {data_dir} does not exist!")
         return
     
     # Find all JSON files
     json_files = list(data_dir.glob("expert_game_states_*.json"))
     
     if not json_files:
-        print(f"No expert data files found in {data_dir}")
+        logger.warning(f"No expert data files found in {data_dir}")
         return
     
-    print(f"Found {len(json_files)} data files to aggregate:")
+    logger.info(f"Found {len(json_files)} data files to aggregate:")
     for f in json_files:
-        print(f"  - {f.name}")
+        logger.info(f"  - {f.name}")
     
     # Load and combine all game states
     all_states = []
@@ -38,15 +43,15 @@ def aggregate_expert_data(data_dir="artifacts/expert_data", output_file="artifac
                 states = json.load(f)
                 all_states.extend(states)
                 total_steps += len(states)
-                print(f"  Loaded {len(states)} steps from {json_file.name}")
+                logger.info(f"  Loaded {len(states)} steps from {json_file.name}")
         except Exception as e:
-            print(f"  Error loading {json_file.name}: {e}")
+            logger.error(f"  Error loading {json_file.name}: {e}")
     
     if not all_states:
-        print("No valid game states found!")
+        logger.error("No valid game states found!")
         return
     
-    print(f"\nTotal steps collected: {total_steps}")
+    logger.info(f"\nTotal steps collected: {total_steps}")
     
     # Convert to training format
     # For each step, extract features from bot_states
@@ -107,9 +112,9 @@ def aggregate_expert_data(data_dir="artifacts/expert_data", output_file="artifac
         }
     )
     
-    print(f"\n✅ Aggregated data saved to {output_file}")
-    print(f"   - Observations shape: {obs_array.shape}")
-    print(f"   - Actions shape: {action_array.shape}")
+    logger.info(f"\n✅ Aggregated data saved to {output_file}")
+    logger.info(f"   - Observations shape: {obs_array.shape}")
+    logger.info(f"   - Actions shape: {action_array.shape}")
 
 if __name__ == "__main__":
     aggregate_expert_data()

@@ -29,7 +29,14 @@ def patched_init(self, *args, enemy_count=0, **kwargs):
     # Store enemy_count as attribute
     self.enemy_count = enemy_count
 
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Patch] %(message)s')
+logger = logging.getLogger(__name__)
+
 # Replace __init__ in the class
 bot_state.BotState.__init__ = patched_init
 
-print("✅ BotState.__init__ patched to accept enemy_count parameter!")
+logger.info("BotState.__init__ patched to accept enemy_count parameter!")
+

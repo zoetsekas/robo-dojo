@@ -1,26 +1,85 @@
-.PHONY: train smoke-test serve clean-logs help
+.PHONY: train train-resume train-selfplay smoke-test export serve collect-expert aggregate-data clean help
 
 # Default target
 help:
 	@echo "RoboDojo Makefile Command Reference:"
-	@echo "  make train        - Start the full-scale distributed training cluster"
-	@echo "  make smoke-test   - Run a quick validation smoke test"
-	@echo "  make serve        - Export the best model and start the inference bot"
-	@echo "  make clean-logs   - Remove all training logs and temporary artifacts"
+	@echo "-------------------------------------------------------------------"
+	@echo "TRAINING SCENARIOS:"
+	@echo "  make train          - Start training from scratch (full cluster)"
+	@echo "  make train-resume   - Resume training from the best checkpoint"
+	@echo "  make train-selfplay - Start training with self-play only"
+	@echo "  make smoke-test     - Run a quick validation test (single worker)"
+	@echo ""
+	@echo "SERVING & DEPLOYMENT:"
+	@echo "  make export         - Convert the best checkpoint to standalone .pt"
+	@echo "  make serve          - Export AND start the inference bot"
+	@echo ""
+	@echo "EXPERT DATA COLLECTION:"
+	@echo "  make collect-expert - Collect demonstration data from sample bots"
+	@echo "  make aggregate-data - Combine collected JSON data into .npz dataset"
+	@echo ""
+	@echo "UTILITIES:"
+	@echo "  make clean          - Stop cluster and remove temporary logs/checkpoints"
+	@echo "-------------------------------------------------------------------"
 
+# 1. TRAINING
 train:
 	docker compose up ray-head ray-worker -d --build
 
+train-resume:
+	@echo "Resuming training from artifacts/checkpoints/best..."
+	docker compose up ray-head ray-worker -d --build
+	docker compose exec ray-head bash -c "pkill -f 'python -m src.train'; sleep 2; python -m src.train resume=artifacts/checkpoints/best"
+
+train-selfplay:
+	@echo "Starting self-play only training..."
+	docker compose up ray-head ray-worker -d --build
+	docker compose exec ray-head bash -c "pkill -f 'python -m src.train'; sleep 2; python -m src.train self_play_only=true"
+
+# 2. SMOKE TESTS
 smoke-test:
 	docker compose up smoke-test --build
 
-serve:
-	@echo "Exporting best model..."
-	docker compose exec ray-head python src/serving/export_model.py --checkpoint artifacts/checkpoints/best
-	@echo "Launching inference bot (requires XLaunch/GUI)..."
-	python src/serving/inference_bot.py artifacts/serving/bot_weights.pt ws://127.0.0.1:7654 :99
+# OS-specific venv path
+ifeq ($(OS),Windows_NT)
+    VENV_PATH = venv/Scripts/python
+    PIP_PATH = venv/Scripts/pip
+else
+    VENV_PATH = venv/bin/python
+    PIP_PATH = venv/bin/pip
+endif
 
-clean-logs:
-	rm -rf artifacts/checkpoints/*
-	rm -rf artifacts/recordings/*
+# 3. DEPLOYMENT
+venv:
+	@if [ ! -d "venv" ]; then \
+		echo "Creating virtual environment..."; \
+		python -m venv venv; \
+		$(PIP_PATH) install -e .; \
+	fi
+
+export:
+	@echo "Exporting best model weights to artifacts/serving/bot_weights.pt..."
+	docker compose exec ray-head python src/serving/export_model.py --checkpoint artifacts/checkpoints/best
+
+serve: venv export
+	@echo "Launching inference bot using venv..."
+	$(VENV_PATH) src/serving/inference_bot.py artifacts/serving/bot_weights.pt ws://127.0.0.1:7654 :99
+
+
+# 4. DATA COLLECTION
+collect-expert:
+	@echo "Starting observer for expert data collection..."
+	docker compose exec ray-head python src/collect_data.py
+
+aggregate-data:
+	@echo "Aggregating collected demonstrations..."
+	docker compose exec ray-head python src/aggregate_data.py
+
+# 5. CLEANUP
+clean:
+	@echo "Cleaning up cluster and temporary artifacts..."
 	docker compose down -v
+	rm -rf artifacts/checkpoints/*
+	rm -rf artifacts/recordings/*.avi
+	rm -rf artifacts/logs/*
+	rm -rf artifacts/expert_data/*.json

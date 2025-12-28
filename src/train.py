@@ -14,6 +14,11 @@ from src.models.multimodal_net import MultimodalRoboModel
 from src.training.callbacks import CombinedTrainingCallback, CurriculumCallback, SelfPlayCallback
 from ray.tune.logger import Logger
 import tempfile
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Train] %(message)s')
+logger = logging.getLogger(__name__)
 
 
 class MinimalLogger(Logger):
@@ -104,28 +109,28 @@ def main(cfg: DictConfig):
     callbacks = create_callbacks(cfg)
     config.callbacks(type(callbacks))
 
-    print("=" * 60)
-    print("RoboDojo Training Configuration (Hydra)")
-    print("=" * 60)
-    print(OmegaConf.to_yaml(cfg))
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("RoboDojo Training Configuration (Hydra)")
+    logger.info("=" * 60)
+    logger.info(OmegaConf.to_yaml(cfg))
+    logger.info("=" * 60)
 
     # Initialize Ray
-    print("Connecting to Ray cluster...")
+    logger.info("Connecting to Ray cluster...")
     ray.init(address="auto")
 
     # Build algorithm
-    print("Building PPO algorithm...")
-    algo = config.build(logger_creator=custom_logger_creator)
+    logger.info("Building PPO algorithm...")
+    algo = config.build_algo(logger_creator=custom_logger_creator)
 
     # Resume from checkpoint if specified
     if cfg.resume:
-        print(f"Resuming from checkpoint: {cfg.resume}")
+        logger.info(f"Resuming from checkpoint: {cfg.resume}")
         algo.restore(cfg.resume)
 
     # Training loop
-    print("\nStarting training loop...")
-    print("-" * 60)
+    logger.info("\nStarting training loop...")
+    logger.info("-" * 60)
     
     best_reward = float('-inf')
     
@@ -146,27 +151,27 @@ def main(cfg: DictConfig):
         league_size = custom_metrics.get("league/size", 0)
         
         # Print progress
-        print(f"Iter {i:4d} | Reward: {reward:7.2f} | "
-              f"Win Rate: {win_rate:5.1%} | "
-              f"Stage: {stage_name} | "
-              f"League: {league_size}")
+        logger.info(f"Iter {i:4d} | Reward: {reward:7.2f} | "
+                    f"Win Rate: {win_rate:5.1%} | "
+                    f"Stage: {stage_name} | "
+                    f"League: {league_size}")
         
         # Save best checkpoint
         if reward > best_reward:
             best_reward = reward
             checkpoint_dir = algo.save("artifacts/checkpoints/best")
-            print(f"  → New best! Saved to {checkpoint_dir}")
+            logger.info(f"  → New best! Saved to {checkpoint_dir}")
         
         # Periodic checkpoints
         if i > 0 and i % 100 == 0:
             checkpoint_dir = algo.save(f"artifacts/checkpoints/iter_{i}")
-            print(f"  → Checkpoint saved to {checkpoint_dir}")
+            logger.info(f"  → Checkpoint saved to {checkpoint_dir}")
     
     # Final save
-    print("-" * 60)
+    logger.info("-" * 60)
     final_checkpoint = algo.save("artifacts/checkpoints/final")
-    print(f"Training complete! Final checkpoint: {final_checkpoint}")
-    print(f"Best reward achieved: {best_reward:.2f}")
+    logger.info(f"Training complete! Final checkpoint: {final_checkpoint}")
+    logger.info(f"Best reward achieved: {best_reward:.2f}")
     
     ray.shutdown()
 

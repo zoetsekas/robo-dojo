@@ -6,6 +6,12 @@ Uses a simple workaround for the BotState issue by never processing ticks.
 import asyncio
 from robocode_tank_royale.bot_api import Bot, BotInfo
 
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [NoOpBot] %(message)s')
+logger = logging.getLogger(__name__)
+
 class NoOpBot(Bot):
     def __init__(self, name="NoOpBot1"):
         bot_info = BotInfo(
@@ -33,4 +39,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(bot.start())
     except Exception as e:
-        print(f"Bot {bot_name} stopped: {e}")
+        logger.error(f"Bot {bot_name} stopped: {e}")
+

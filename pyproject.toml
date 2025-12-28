@@ -11,6 +11,7 @@ authors = [
 dependencies = [
     "ray[rllib,tune]>=2.9.0",
     "torch",
+    "numpy",
     "opencv-python-headless",
     "mss",
     "pyautogui",

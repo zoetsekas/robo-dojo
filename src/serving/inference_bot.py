@@ -2,8 +2,14 @@ import asyncio
 import numpy as np
 import torch
 import torch.nn as nn
+import logging
+import sys
 from robocode_tank_royale.bot_api import Bot, BotInfo
 from src.env.video_capture import VideoCapture
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Inference] %(message)s')
+logger = logging.getLogger(__name__)
 
 class InferenceNet(nn.Module):
     """Standalone version of the trained network without RLlib dependencies."""
@@ -65,7 +71,7 @@ class InferenceBot(Bot):
         # Vision
         self.video_capture = VideoCapture(display=display)
         
-        print(f"InferenceBot initialized on {self.device}. Using display {display}")
+        logger.info(f"InferenceBot initialized on {self.device}. Using display {display}")
 
     def _normalize_vec(self, o):
         # Must match RobocodeGymEnv._get_obs normalization

@@ -11,6 +11,10 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 import json
 import os
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 class TrainingPhase(Enum):
@@ -58,7 +62,7 @@ class TrainingCurriculum:
         
         # In training loop:
         if curriculum.check_progression(metrics):
-            print(f"Advancing to stage: {curriculum.current_stage.name}")
+            logger.info(f"Advancing to stage: {curriculum.current_stage.name}")
             
         opponent_config = curriculum.get_opponent_config()
     """
@@ -170,13 +174,13 @@ class TrainingCurriculum:
             return False  # Already at final stage
         
         reason = "milestone" if milestone_reached else "max_iterations"
-        print(f"[Curriculum] Stage '{self.current_stage.name}' complete ({reason})")
-        print(f"[Curriculum] Final win rate: {final_win_rate:.2%}")
+        logger.info(f"[Curriculum] Stage '{self.current_stage.name}' complete ({reason})")
+        logger.info(f"[Curriculum] Final win rate: {final_win_rate:.2%}")
         
         self.current_stage_idx += 1
         self.stage_start_iteration = self.current_iteration
         
-        print(f"[Curriculum] Advancing to stage: {self.current_stage.name}")
+        logger.info(f"[Curriculum] Advancing to stage: {self.current_stage.name}")
         
         # Save checkpoint
         self.save_checkpoint()
@@ -231,7 +235,7 @@ class TrainingCurriculum:
         with open(path, 'w') as f:
             json.dump(state, f, indent=2)
         
-        print(f"[Curriculum] Checkpoint saved to {path}")
+        logger.info(f"[Curriculum] Checkpoint saved to {path}")
         return path
     
     @classmethod

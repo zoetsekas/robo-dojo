@@ -15,7 +15,11 @@ import numpy as np
 import os
 import json
 import pickle
+import logging
 from datetime import datetime
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -105,8 +109,8 @@ class PolicyLeague:
         if len(self.snapshots) > self.max_size:
             self._prune_league()
         
-        print(f"[League] Added snapshot at iteration {iteration} "
-              f"(league size: {len(self.snapshots)})")
+        logger.info(f"[League] Added snapshot at iteration {iteration} "
+                    f"(league size: {len(self.snapshots)})")
     
     def _prune_league(self) -> None:
         """Remove policies to stay within max_size, preserving top performers."""
@@ -275,7 +279,7 @@ class PolicyLeague:
                 "snapshots": [s.to_dict() for s in self.snapshots],
             }, f, indent=2)
         
-        print(f"[League] Saved checkpoint to {path}")
+        logger.info(f"[League] Saved checkpoint to {path}")
         return path
     
     @classmethod
@@ -290,7 +294,7 @@ class PolicyLeague:
         )
         league.snapshots = data["snapshots"]
         
-        print(f"[League] Loaded {len(league.snapshots)} snapshots from {path}")
+        logger.info(f"[League] Loaded {len(league.snapshots)} snapshots from {path}")
         return league
 
 

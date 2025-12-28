@@ -10,6 +10,11 @@ import time
 import os
 import subprocess
 import threading
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Collect] %(message)s')
+logger = logging.getLogger(__name__)
 
 async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data"):
     """
@@ -23,7 +28,7 @@ async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data")
     
     server_url = "ws://127.0.0.1:7654"
     
-    print("Connecting as observer to collect data...")
+    logger.info("Connecting as observer to collect data...")
     
     try:
         async with websockets.connect(server_url) as ws:
@@ -40,7 +45,7 @@ async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data")
                 "author": "RoboDojo"
             }))
             
-            print("Observer connected. Waiting for game to start...")
+            logger.info("Observer connected. Waiting for game to start...")
             
             # 2. Listen for game events and collect data
             round_count = 0
@@ -51,7 +56,7 @@ async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data")
                 msg_type = data.get("type")
                 
                 if msg_type == "GameStartedEventForObserver":
-                    print(f"Game started! Collecting data for round {round_count + 1}...")
+                    logger.info(f"Game started! Collecting data for round {round_count + 1}...")
                     
                 elif msg_type == "TickEventForObserver":
                     # Extract relevant game state
@@ -71,19 +76,19 @@ async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data")
                         step_count += 1
                         
                         if step_count % 100 == 0:
-                            print(f"  Collected {step_count} steps...")
+                            logger.info(f"  Collected {step_count} steps...")
                 
                 elif msg_type == "RoundEndedEventForObserver":
                     round_count += 1
-                    print(f"Round {round_count} ended. Total steps: {step_count}")
+                    logger.info(f"Round {round_count} ended. Total steps: {step_count}")
                     
                 elif msg_type == "GameEndedEventForObserver":
-                    print(f"Game ended. Total rounds: {round_count}, Total steps: {step_count}")
+                    logger.info(f"Game ended. Total rounds: {round_count}, Total steps: {step_count}")
                     if round_count >= num_rounds:
                         break
                         
     except Exception as e:
-        print(f"Observer error: {e}")
+        logger.error(f"Observer error: {e}")
     
     # 3. Save collected data
     if game_states:
@@ -93,25 +98,25 @@ async def collect_expert_data(num_rounds=10, output_dir="artifacts/expert_data")
         with open(output_file, 'w') as f:
             json.dump(game_states, f)
         
-        print(f"Saved {len(game_states)} game states to {output_file}")
+        logger.info(f"Saved {len(game_states)} game states to {output_file}")
     else:
-        print("No data collected!")
+        logger.warning("No data collected!")
 
 def main():
-    print("Starting Expert Data Collection...")
-    print("This will observe battles between SimpleTarget and SimpleSpin.")
+    logger.info("Starting Expert Data Collection...")
+    logger.info("This will observe battles between SimpleTarget and SimpleSpin.")
     
     # The infrastructure (server, GUI, bots, controller) is already started by robocode_env.py
     # We just need to connect as an observer
     
     # Wait a bit for the infrastructure to be ready
-    print("Waiting for infrastructure to initialize...")
+    logger.info("Waiting for infrastructure to initialize...")
     time.sleep(30)
     
     # Run the data collection
     asyncio.run(collect_expert_data(num_rounds=3))
     
-    print("Data collection complete!")
+    logger.info("Data collection complete!")
 
 if __name__ == "__main__":
     main()

@@ -10,13 +10,17 @@ Ray RLLib's training loop, handling:
 
 Updated for Ray 2.x+ RLlibCallback API.
 """
-from typing import Dict, Any, Optional
 import os
+import logging
+from typing import Dict, Any, Optional
 
 from ray.rllib.callbacks.callbacks import RLlibCallback
 
 from .curriculum import TrainingCurriculum, TrainingPhase
 from .self_play import PolicyLeague, OpponentSampler
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 
 class CurriculumCallback(RLlibCallback):
@@ -38,13 +42,13 @@ class CurriculumCallback(RLlibCallback):
         # Check for existing checkpoint
         checkpoint_path = "artifacts/curriculum/curriculum_state.json"
         if os.path.exists(checkpoint_path):
-            print("[CurriculumCallback] Loading existing curriculum checkpoint")
+            logger.info("[CurriculumCallback] Loading existing curriculum checkpoint")
             self.curriculum = TrainingCurriculum.load_checkpoint(checkpoint_path)
         else:
-            print("[CurriculumCallback] Initializing new curriculum")
+            logger.info("[CurriculumCallback] Initializing new curriculum")
             self.curriculum = TrainingCurriculum.default()
         
-        print(f"[CurriculumCallback] Starting at stage: {self.curriculum.current_stage.name}")
+        logger.info(f"[CurriculumCallback] Starting at stage: {self.curriculum.current_stage.name}")
     
     def on_episode_end(
         self,
@@ -97,7 +101,7 @@ class CurriculumCallback(RLlibCallback):
         
         # Check for progression
         if self.curriculum.check_progression(metrics):
-            print(f"[CurriculumCallback] Advanced to: {self.curriculum.current_stage.name}")
+            logger.info(f"[CurriculumCallback] Advanced to: {self.curriculum.current_stage.name}")
             # Reset outcome tracking for new stage
             self.episode_outcomes = []
         
@@ -144,10 +148,10 @@ class SelfPlayCallback(RLlibCallback):
         checkpoint_path = "artifacts/policy_league/league_state.pkl"
         
         if os.path.exists(checkpoint_path):
-            print("[SelfPlayCallback] Loading existing policy league")
+            logger.info("[SelfPlayCallback] Loading existing policy league")
             self.league = PolicyLeague.load_checkpoint(checkpoint_path)
         else:
-            print("[SelfPlayCallback] Initializing new policy league")
+            logger.info("[SelfPlayCallback] Initializing new policy league")
             self.league = PolicyLeague(max_size=self.league_max_size)
         
         self.sampler = OpponentSampler(league=self.league)
@@ -197,7 +201,7 @@ class SelfPlayCallback(RLlibCallback):
                 if len(self.league) % 5 == 0:
                     self.league.save_checkpoint()
         except Exception as e:
-            print(f"[SelfPlayCallback] Failed to create snapshot: {e}")
+            logger.error(f"[SelfPlayCallback] Failed to create snapshot: {e}")
     
     def get_opponent_weights(self, opponent_config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Get opponent weights for self-play."""

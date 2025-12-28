@@ -11,6 +11,12 @@ Or standalone: python tests/test_opponent_rotation.py
 """
 import sys
 import os
+import logging
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Test] %(message)s')
+logger = logging.getLogger(__name__)
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.env.opponent_manager import OpponentManager, get_bot_registry, BotSpec
@@ -30,7 +36,7 @@ def test_bot_registry():
     assert "SpinBot" in registry
     assert registry["Crazy"].bot_type == "sample"
     
-    print(f"✓ Registry contains {len(registry)} bots")
+    logger.info(f"✓ Registry contains {len(registry)} bots")
     return True
 
 
@@ -51,7 +57,7 @@ def test_opponent_selection():
     # Should have selected at least 2 different bots (probabilistic but very likely)
     assert len(selections) >= 2, f"Expected variety in selection, got: {selections}"
     
-    print(f"✓ Random selection working, selected: {selections}")
+    logger.info(f"✓ Random selection working, selected: {selections}")
     return True
 
 
@@ -66,7 +72,7 @@ def test_opponent_pool_default():
     assert "Crazy" in manager.available_bots
     assert "simple_target" in manager.available_bots
     
-    print(f"✓ Default pool has {len(manager.available_bots)} bots")
+    logger.info(f"✓ Default pool has {len(manager.available_bots)} bots")
     return True
 
 
@@ -83,14 +89,14 @@ def test_manager_status():
     assert status["total"] == 0
     assert status["pool_size"] == 1
     
-    print(f"✓ Status reporting working: {status}")
+    logger.info(f"✓ Status reporting working: {status}")
     return True
 
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print("Opponent Rotation Smoke Test")
-    print("=" * 50)
+    logger.info("=" * 50)
+    logger.info("Opponent Rotation Smoke Test")
+    logger.info("=" * 50)
     
     tests = [
         test_bot_registry,
@@ -107,10 +113,11 @@ if __name__ == "__main__":
             if test():
                 passed += 1
         except Exception as e:
-            print(f"✗ {test.__name__} failed: {e}")
+            logger.error(f"✗ {test.__name__} failed: {e}")
             failed += 1
     
-    print("=" * 50)
-    print(f"Results: {passed} passed, {failed} failed")
+    logger.info("=" * 50)
+    logger.info(f"Results: {passed} passed, {failed} failed")
     
     sys.exit(0 if failed == 0 else 1)
+

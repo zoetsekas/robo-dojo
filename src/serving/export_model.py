@@ -1,12 +1,17 @@
 import torch
 import os
 import argparse
+import logging
 from ray.rllib.algorithms.algorithm import Algorithm
 from src.models.multimodal_net import MultimodalRoboModel
 
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [Export] %(message)s')
+logger = logging.getLogger(__name__)
+
 def export_checkpoint(checkpoint_path, output_path):
     """Load an RLlib checkpoint and save the model weights for standalone use."""
-    print(f"Loading checkpoint from: {checkpoint_path}")
+    logger.info(f"Loading checkpoint from: {checkpoint_path}")
     
     # Load the algorithm
     algo = Algorithm.from_checkpoint(checkpoint_path)
@@ -20,7 +25,7 @@ def export_checkpoint(checkpoint_path, output_path):
     # Save the state dict
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     torch.save(model.state_dict(), output_path)
-    print(f"Successfully exported model weights to: {output_path}")
+    logger.info(f"Successfully exported model weights to: {output_path}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -29,3 +34,4 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     export_checkpoint(args.checkpoint, args.output)
+
