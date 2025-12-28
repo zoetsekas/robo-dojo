@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     fluxbox \
     wmctrl \
+    xdotool \
     x11-utils \
     x11-xserver-utils \
     x11-apps \

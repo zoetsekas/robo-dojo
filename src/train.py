@@ -10,7 +10,7 @@ import os
 import numpy as np
 
 from src.env.robocode_env import RobocodeGymEnv
-from src.models.multimodal_net import MultimodalRoboModel
+from src.models.multimodal_net import MultimodalRoboModel, VectorOnlyRoboModel
 from src.training.callbacks import CombinedTrainingCallback, CurriculumCallback, SelfPlayCallback
 from ray.tune.logger import Logger
 import tempfile
@@ -49,9 +49,10 @@ def create_callbacks(cfg: DictConfig):
 
 @hydra.main(version_base=None, config_path="../config", config_name="main")
 def main(cfg: DictConfig):
-    # Register environment and model
+    # Register environment and models
     register_env("robocode_multimodal", lambda env_cfg: RobocodeGymEnv(env_cfg))
     ModelCatalog.register_custom_model("multimodal_robo_model", MultimodalRoboModel)
+    ModelCatalog.register_custom_model("vector_only_robo_model", VectorOnlyRoboModel)
 
     # Determine scales and workers based on mode
     if cfg.smoke_test:
@@ -98,7 +99,7 @@ def main(cfg: DictConfig):
             sample_timeout_s=cfg.env.sample_timeout_s
         )
         .training(
-            model={"custom_model": "multimodal_robo_model"},
+            model={"custom_model": "multimodal_robo_model" if env_config.get("use_visual_obs", True) else "vector_only_robo_model"},
             train_batch_size=train_batch_size,
             minibatch_size=minibatch_size,
             num_epochs=num_epochs,

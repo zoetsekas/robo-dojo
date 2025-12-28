@@ -100,3 +100,59 @@ class MultimodalRoboModel(TorchModelV2, nn.Module):
     @override(TorchModelV2)
     def value_function(self):
         return self._value_out.reshape(-1)
+
+
+class VectorOnlyRoboModel(TorchModelV2, nn.Module):
+    """
+    MLP-only neural network for Robocode vector observations.
+    Used when visual observations are disabled (use_visual_obs=False).
+    
+    Input: 37-dim vector (13 self-state + 18 enemies + 4 combat + 2 reserved)
+    Output: Continuous actions [target_speed, turn_rate, gun_turn_rate, radar_turn_rate, fire]
+    """
+    
+    def __init__(self, obs_space, action_space, num_outputs, model_config, name):
+        TorchModelV2.__init__(self, obs_space, action_space, num_outputs, model_config, name)
+        nn.Module.__init__(self)
+
+        # Get vector size from observation space
+        if hasattr(obs_space, "shape"):
+            self.vector_size = obs_space.shape[0]
+        else:
+            self.vector_size = 37  # Default for our env
+        
+        # --- Vector Processing MLP (deeper than fusion branch) ---
+        self.fc = nn.Sequential(
+            nn.Linear(self.vector_size, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, 128),
+            nn.ReLU(),
+        )
+        
+        # Action Head
+        self.action_head = nn.Linear(128, num_outputs)
+        
+        # Value Head
+        self.value_head = nn.Linear(128, 1)
+        
+        self._value_out = None
+
+    @override(TorchModelV2)
+    def forward(self, input_dict, state, seq_lens):
+        # Vector observation (direct Box observation)
+        x = input_dict["obs"].float()
+        
+        # Pass through MLP
+        features = self.fc(x)
+        
+        # Heads
+        action_logits = self.action_head(features)
+        self._value_out = self.value_head(features)
+        
+        return action_logits, state
+
+    @override(TorchModelV2)
+    def value_function(self):
+        return self._value_out.reshape(-1)

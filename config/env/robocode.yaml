@@ -1,0 +1,24 @@
+name: robocode_multimodal
+use_gui: true
+use_xvfb: true
+use_visual_obs: true  # Set to false for vector-only training (no visual input)
+record_every_n_episodes: 100
+
+# Opponent settings - "random" selects from opponent_pool each episode
+opponent_type: "random"         # Options: random, specific bot name (e.g., "Crazy", "simple_target")
+opponent_pool:                  # Pool for random selection (null = all available bots)
+  - Crazy
+  - Fire
+  - SpinBot
+  - RamFire
+  - TrackFire
+  - VelocityBot
+  - Walls
+  - Corners
+num_opponents: 1                # Number of opponents per match
+
+num_envs_per_env_runner: 2
+sample_timeout_s: 600
+step_timeout_s: 5.0               # Timeout per step() call before truncating
+curriculum:
+  90_percent_advancement: true
