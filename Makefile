@@ -27,20 +27,24 @@ help:
 	@echo "-------------------------------------------------------------------"
 
 # 1. TRAINING
+train: export TRAIN_ARGS=
 train:
-	export TRAIN_ARGS="" && docker compose up ray-head ray-worker -d --build
+	docker compose up ray-head ray-worker -d --build
 
+train-resume: export TRAIN_ARGS=resume=artifacts/checkpoints/best
 train-resume:
 	@echo "Resuming training from artifacts/checkpoints/best..."
-	export TRAIN_ARGS="resume=artifacts/checkpoints/best" && docker compose up ray-head ray-worker -d --build
+	docker compose up ray-head ray-worker -d --build
 
+train-selfplay: export TRAIN_ARGS=self_play_only=true
 train-selfplay:
 	@echo "Starting self-play only training..."
-	export TRAIN_ARGS="self_play_only=true" && docker compose up ray-head ray-worker -d --build
+	docker compose up ray-head ray-worker -d --build
 
+train-vector: export TRAIN_ARGS=env.use_visual_obs=false
 train-vector:
 	@echo "Starting VECTOR-ONLY training (no visual observations)..."
-	export TRAIN_ARGS="env.use_visual_obs=false" && docker compose up ray-head ray-worker -d --build
+	docker compose up ray-head ray-worker -d --build
 
 # 2. SMOKE TESTS
 smoke-test:
@@ -61,11 +65,8 @@ endif
 
 # 3. DEPLOYMENT
 venv:
-	@if [ ! -d "venv" ]; then \
-		echo "Creating virtual environment..."; \
-		python -m venv venv; \
-		$(PIP_PATH) install -e .; \
-	fi
+	@python -c "import os, subprocess; subprocess.run(['python', '-m', 'venv', 'venv']) if not os.path.exists('venv') else None"
+	@$(PIP_PATH) install -e .
 
 export:
 	@echo "Exporting best model weights to artifacts/serving/bot_weights.pt..."
@@ -101,7 +102,7 @@ stop:
 clean:
 	@echo "Cleaning up cluster and temporary artifacts..."
 	docker compose down -v
-	rm -rf artifacts/checkpoints/*
-	rm -rf artifacts/recordings/*.avi
-	rm -rf artifacts/logs/*
-	rm -rf artifacts/expert_data/*.json
+	@python -c "import glob, os, shutil; [shutil.rmtree(p) if os.path.isdir(p) else os.remove(p) for p in glob.glob('artifacts/checkpoints/*')]"
+	@python -c "import glob, os; [os.remove(p) for p in glob.glob('artifacts/recordings/*.avi')]"
+	@python -c "import glob, os, shutil; [shutil.rmtree(p) if os.path.isdir(p) else os.remove(p) for p in glob.glob('artifacts/logs/*')]"
+	@python -c "import glob, os; [os.remove(p) for p in glob.glob('artifacts/expert_data/*.json')]"

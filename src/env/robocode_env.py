@@ -890,26 +890,6 @@ class RobocodeGymEnv(gym.Env):
         self.last_event = tick_event
         return self._get_obs(), accumulated_reward, done, truncated, info
 
-    def _save_tick_data(self):
-        """Save collected tick data to disk for analysis."""
-        import json
-        import os
-        
-        save_dir = "artifacts/tick_data"
-        os.makedirs(save_dir, exist_ok=True)
-        
-        filepath = os.path.join(save_dir, f"episode_{self.episode_count}_ticks.json")
-        try:
-            with open(filepath, "w") as f:
-                json.dump({
-                    "episode": self.episode_count,
-                    "total_reward": self.total_reward,
-                    "ticks": self._tick_data
-                }, f, indent=2)
-            logger.debug(f"Saved tick data for episode {self.episode_count} to {filepath}")
-        except Exception as e:
-            logger.error(f"Failed to save tick data: {e}")
-
     def _get_obs(self):
         """Build 37-dimensional observation vector for multi-enemy support.
         
@@ -1000,8 +980,8 @@ class RobocodeGymEnv(gym.Env):
         """Save tick-by-tick game state data to JSON file for debugging."""
         import json
         try:
-            os.makedirs("/app/artifacts/tick_data", exist_ok=True)
-            filename = f"/app/artifacts/tick_data/episode_{self.episode_count}_ticks.json"
+            os.makedirs("artifacts/tick_data", exist_ok=True)
+            filename = f"artifacts/tick_data/episode_{self.episode_count}_ticks.json"
             
             summary = {
                 "episode": self.episode_count,
