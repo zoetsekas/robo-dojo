@@ -1,0 +1,13 @@
+defaults:
+  - training: ppo
+  - env: robocode
+  - hardware: standard
+  - _self_
+
+# General Experiment Settings
+experiment_name: robodojo_training
+max_iterations: 1000
+resume: null
+curriculum_enabled: true
+self_play_only: false
+smoke_test: false

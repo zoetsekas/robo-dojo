@@ -1,0 +1,5 @@
+num_workers: 12
+num_gpus: 1
+shm_size: 8gb
+memory_limit: 8gb
+worker_cpu: 1

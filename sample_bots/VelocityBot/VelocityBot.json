@@ -1,0 +1,12 @@
+{
+  "name": "Velocity Bot",
+  "version": "1.0",
+  "authors": [
+    "Joshua Galecki"
+  ],
+  "description": "Example bot of how to use turn rates.",
+  "homepage": "",
+  "countryCodes": [],
+  "platform": "Python",
+  "programmingLang": "Python 3"
+}

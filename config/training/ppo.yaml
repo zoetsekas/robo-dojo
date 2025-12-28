@@ -1,0 +1,9 @@
+lr: 0.0003
+gamma: 0.99
+lambda_: 0.95
+clip_param: 0.2
+entropy_coeff: 0.01
+vf_loss_coeff: 0.5
+num_epochs: 10
+train_batch_size: 16000
+minibatch_size: 1024

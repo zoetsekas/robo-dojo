@@ -1,0 +1,126 @@
+services:
+  # Ray head node - coordinates training, runs the main script
+  ray-head:
+    build: .
+    image: robodojo
+    hostname: ray-head
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./src:/app/src
+      - ./tank-royale:/app/tank-royale
+      - ./sample_bots:/app/sample_bots
+      - /dev/shm:/dev/shm
+    shm_size: '16gb'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    # Start head node, then run training with remote workers
+    command: >
+      bash -c "
+        ray start --head --port=6379 --dashboard-host=0.0.0.0 --include-dashboard=false --num-cpus 0 --block &
+        sleep 15 &&
+        python -m src.train
+      "
+    ports:
+      - "6379:6379"
+      - "8265:8265"
+    networks:
+      - robodojo-net
+
+  # Ray worker nodes - each has isolated network, can use same port
+  ray-worker:
+    build: .
+    image: robodojo
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./src:/app/src
+      - ./tank-royale:/app/tank-royale
+      - ./sample_bots:/app/sample_bots
+      - /dev/shm:/dev/shm
+    shm_size: '8gb'
+    depends_on:
+      - ray-head
+    # Connect to head and register as worker
+    command: >
+      bash -c "
+        sleep 10 &&
+        ray start --address=ray-head:6379 --num-cpus 1 --block
+      "
+    networks:
+      - robodojo-net
+    # Scale this to run multiple workers
+    environment:
+      - RAY_memory_usage_threshold=0.9
+      - RAY_memory_monitor_refresh_ms=0  # Disable Ray's internal monitor to let Docker/OS handle it
+    deploy:
+      mode: replicated
+      replicas: 12
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+
+  # Smoke test - single container, no workers
+  smoke-test:
+    build: .
+    image: robodojo
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./src:/app/src
+      - ./tank-royale:/app/tank-royale
+      - ./sample_bots:/app/sample_bots
+    shm_size: '8gb'
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    command: >
+      bash -c "
+        ray start --head --port=6379 --include-dashboard=false --block &
+        sleep 10 &&
+        python -m src.train smoke_test=true hardware.num_workers=1
+      "
+    networks:
+      - robodojo-net
+
+  # Visual debugging - Connect to XLaunch on host
+  visual-smoke-test:
+    build: .
+    image: robodojo
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./src:/app/src
+      - ./tank-royale:/app/tank-royale
+      - ./sample_bots:/app/sample_bots
+    shm_size: '8gb'
+    environment:
+      - ROBODOJO_DISPLAY=host.docker.internal:0.0
+      - ROBODOJO_USE_GUI=true
+      - ROBODOJO_USE_XVFB=false
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+    command: >
+      bash -c "
+        ray start --head --port=6379 --include-dashboard=false --block &
+        sleep 10 &&
+        python -m src.train smoke_test=true hardware.num_workers=1 env.use_gui=true env.use_xvfb=false
+      "
+    networks:
+      - robodojo-net
+
+networks:
+  robodojo-net:
+    driver: bridge

@@ -1,0 +1,29 @@
+[project]
+name = "robodojo"
+version = "0.1.0"
+description = "Stabilized Robocode RL Training Pipeline"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "RoboDojo Team"}
+]
+dependencies = [
+    "ray[rllib,tune]>=2.9.0",
+    "torch",
+    "opencv-python-headless",
+    "mss",
+    "pyautogui",
+    "websockets",
+    "hydra-core",
+    "omegaconf",
+    "robocode-tank-royale"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
