@@ -58,7 +58,7 @@ services:
       - RAY_memory_monitor_refresh_ms=0  # Disable Ray's internal monitor to let Docker/OS handle it
     deploy:
       mode: replicated
-      replicas: 12
+      replicas: 40
       resources:
         limits:
           memory: 8G

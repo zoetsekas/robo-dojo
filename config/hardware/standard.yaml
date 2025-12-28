@@ -1,4 +1,4 @@
-num_workers: 12
+num_workers: 40
 num_gpus: 1
 shm_size: 8gb
 memory_limit: 8gb
