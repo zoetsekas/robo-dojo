@@ -15,6 +15,7 @@ from src.training.callbacks import CombinedTrainingCallback, CurriculumCallback,
 from ray.tune.logger import Logger
 import tempfile
 import logging
+from tqdm import tqdm
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [Train] %(message)s')
@@ -52,20 +53,29 @@ def main(cfg: DictConfig):
     register_env("robocode_multimodal", lambda env_cfg: RobocodeGymEnv(env_cfg))
     ModelCatalog.register_custom_model("multimodal_robo_model", MultimodalRoboModel)
 
-    # Determine batch sizes based on mode
+    # Determine scales and workers based on mode
     if cfg.smoke_test:
         train_batch_size = 200
         minibatch_size = 64
         num_epochs = 1
         max_iterations = 5
+        num_envs_per_env_runner = 1
+        num_env_runners = 0  # Run on local worker only
+        create_env_on_local_worker = True
     else:
         train_batch_size = cfg.training.train_batch_size
         minibatch_size = cfg.training.minibatch_size
         num_epochs = cfg.training.num_epochs
         max_iterations = cfg.max_iterations
+        num_envs_per_env_runner = cfg.env.num_envs_per_env_runner
+        num_env_runners = cfg.hardware.num_workers
+        create_env_on_local_worker = False
 
     # Prepare env_config
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
+    if cfg.smoke_test:
+        env_config["record_every_n_episodes"] = 1
+        
     env_config.update({
         "num_workers": cfg.hardware.num_workers,
         "smoke_test": cfg.smoke_test,
@@ -81,9 +91,9 @@ def main(cfg: DictConfig):
             enable_env_runner_and_connector_v2=False,
         )
         .env_runners(
-            num_env_runners=cfg.hardware.num_workers, 
-            num_envs_per_env_runner=cfg.env.num_envs_per_env_runner,
-            create_env_on_local_worker=False,
+            num_env_runners=num_env_runners, 
+            num_envs_per_env_runner=num_envs_per_env_runner,
+            create_env_on_local_worker=create_env_on_local_worker,
             sample_timeout_s=cfg.env.sample_timeout_s
         )
         .training(
@@ -134,7 +144,8 @@ def main(cfg: DictConfig):
     
     best_reward = float('-inf')
     
-    for i in range(max_iterations):
+    pbar = tqdm(range(max_iterations), desc="Training")
+    for i in pbar:
         results = algo.train()
         
         # Extract metrics (handle both old and new API)
@@ -150,17 +161,15 @@ def main(cfg: DictConfig):
         win_rate = custom_metrics.get("curriculum/win_rate", 0.0)
         league_size = custom_metrics.get("league/size", 0)
         
-        # Print progress
-        logger.info(f"Iter {i:4d} | Reward: {reward:7.2f} | "
-                    f"Win Rate: {win_rate:5.1%} | "
-                    f"Stage: {stage_name} | "
-                    f"League: {league_size}")
+        # Update progress bar
+        status_msg = f"Rwd: {reward:7.2f} | Win: {win_rate:5.1%} | {stage_name}"
+        pbar.set_description(f"Iter {i:4d} | {status_msg}")
         
         # Save best checkpoint
         if reward > best_reward:
             best_reward = reward
             checkpoint_dir = algo.save("artifacts/checkpoints/best")
-            logger.info(f"  → New best! Saved to {checkpoint_dir}")
+            pbar.write(f"  → New best reward: {reward:7.2f}! Saved to {checkpoint_dir}")
         
         # Periodic checkpoints
         if i > 0 and i % 100 == 0:

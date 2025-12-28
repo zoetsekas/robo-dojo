@@ -18,7 +18,8 @@ dependencies = [
     "websockets",
     "hydra-core",
     "omegaconf",
-    "robocode-tank-royale"
+    "robocode-tank-royale",
+    "tqdm"
 ]
 
 [build-system]

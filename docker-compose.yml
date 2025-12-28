@@ -9,6 +9,7 @@ services:
       - ./src:/app/src
       - ./tank-royale:/app/tank-royale
       - ./sample_bots:/app/sample_bots
+      - ./tests:/app/tests
       - /dev/shm:/dev/shm
     shm_size: '16gb'
     deploy:
@@ -74,6 +75,7 @@ services:
       - ./src:/app/src
       - ./tank-royale:/app/tank-royale
       - ./sample_bots:/app/sample_bots
+      - ./tests:/app/tests
     shm_size: '8gb'
     deploy:
       resources:

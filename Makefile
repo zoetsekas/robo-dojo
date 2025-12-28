@@ -1,4 +1,4 @@
-.PHONY: train train-resume train-selfplay smoke-test export serve collect-expert aggregate-data clean help
+.PHONY: train train-resume train-selfplay smoke-test export serve collect-expert aggregate-data stop clean help
 
 # Default target
 help:
@@ -19,7 +19,8 @@ help:
 	@echo "  make aggregate-data - Combine collected JSON data into .npz dataset"
 	@echo ""
 	@echo "UTILITIES:"
-	@echo "  make clean          - Stop cluster and remove temporary logs/checkpoints"
+	@echo "  make stop           - Stop the cluster (pauses training, keeps checkpoints)"
+	@echo "  make clean          - Stop cluster and WIPE temporary logs/checkpoints (DANGEROUS)"
 	@echo "-------------------------------------------------------------------"
 
 # 1. TRAINING
@@ -76,6 +77,10 @@ aggregate-data:
 	docker compose exec ray-head python src/aggregate_data.py
 
 # 5. CLEANUP
+stop:
+	@echo "Stopping training cluster..."
+	docker compose stop
+
 clean:
 	@echo "Cleaning up cluster and temporary artifacts..."
 	docker compose down -v
