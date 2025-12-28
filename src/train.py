@@ -60,8 +60,8 @@ def main(cfg: DictConfig):
         num_epochs = 1
         max_iterations = 5
         num_envs_per_env_runner = 1
-        num_env_runners = 0  # Run on local worker only
-        create_env_on_local_worker = True
+        num_env_runners = 1
+        create_env_on_local_worker = False
     else:
         train_batch_size = cfg.training.train_batch_size
         minibatch_size = cfg.training.minibatch_size
@@ -75,6 +75,7 @@ def main(cfg: DictConfig):
     env_config = OmegaConf.to_container(cfg.env, resolve=True)
     if cfg.smoke_test:
         env_config["record_every_n_episodes"] = 1
+        env_config["use_gui"] = True  # Required to render the game for recording
         
     env_config.update({
         "num_workers": cfg.hardware.num_workers,

@@ -69,6 +69,7 @@ make train-resume
 ### 2. Monitoring the "Soul" of the Bot
 Don't just look at numbers. Occasionally watch a battle:
 - Check `artifacts/recordings/` for `.mp4` files.
+- **Note**: Recordings will be **black** if `env.use_gui` is set to `false`. To see the game in recordings (and for the bot to see the arena), set `use_gui: true` in `config/env/robocode.yaml`.
 - Use `make serve` to run the bot "Live" against local sample bots in the Robocode GUI.
 
 ### 3. Scaling the Brain
