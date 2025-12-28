@@ -22,6 +22,7 @@ services:
     # Start head node, then run training with remote workers
     environment:
       - TRAIN_ARGS=${TRAIN_ARGS:-}
+      - ROBODOJO_NUM_WORKERS=${ROBODOJO_NUM_WORKERS:-40}
     command: >
       bash -c "
         ray start --head --port=6379 --dashboard-host=0.0.0.0 --include-dashboard=false --num-cpus 0 --block &
@@ -61,7 +62,7 @@ services:
       - RAY_memory_monitor_refresh_ms=0  # Disable Ray's internal monitor to let Docker/OS handle it
     deploy:
       mode: replicated
-      replicas: 40
+      replicas: ${ROBODOJO_NUM_WORKERS:-40}
       resources:
         limits:
           memory: 8G

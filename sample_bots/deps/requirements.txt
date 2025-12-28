@@ -1,6 +1,0 @@
-pip>=24
-PyYAML>=6
-setuptools>=77
-pycountry>=24
-websockets>=15
-mypy

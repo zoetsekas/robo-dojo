@@ -1,5 +1,5 @@
 name: robocode_multimodal
-use_gui: true
+use_gui: false
 use_xvfb: true
 use_visual_obs: true  # Set to false for vector-only training (no visual input)
 export_tick_data: false  # Set to true to export tick-by-tick game data to JSON
@@ -16,6 +16,7 @@ opponent_pool:                  # Pool for random selection (null = all availabl
   - VelocityBot
   - Walls
   - Corners
+  - Target
 num_opponents: 1                # Number of opponents per match
 
 num_envs_per_env_runner: 2

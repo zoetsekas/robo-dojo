@@ -595,46 +595,82 @@ class RobocodeGymEnv(gym.Env):
             
             def _start_bot_loop(stop_ev, bot):
                 import asyncio
+                import logging
+                loop_logger = logging.getLogger("RoboBotLoop")
+                
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
                 
                 async def _run_bot():
+                    """Internal task to keep the bot connected."""
                     while not stop_ev.is_set():
                         try:
-                            # Start will block until disconnected or stop() called
-                            # Use wait_for to check stop_event occasionally if needed,
-                            # or just rely on bot.stop() being called from another thread.
+                            # start() blocks until disconnected or stop() is called
                             await bot.start()
                         except Exception as e:
-                            if stop_ev.is_set(): break
-                            logger.error(f"Bot connection error: {e}")
-                            await asyncio.sleep(2)
+                            if stop_ev.is_set():
+                                break
+                            loop_logger.error(f"Bot connection error: {e}")
+                            await asyncio.sleep(1)
                 
                 bot_task = loop.create_task(_run_bot())
                 
-                # Monitor stop event to cancel task
-                async def _monitor():
-                    from robocode_tank_royale.bot_api.internal.thread_interrupted_exception import ThreadInterruptedException
+                # Monitor stop event to signal bot to stop
+                async def _monitor_stop():
                     while not stop_ev.is_set():
-                        await asyncio.sleep(0.5)
-                    logger.info("Stop event set, cancelling bot task...")
-                    bot_task.cancel()
+                        await asyncio.sleep(0.2)
+                    
+                    loop_logger.info("Stop event detected, initiating bot shutdown...")
+                    # Signal the bot to stop its internal loop and disconnect
                     try:
-                        await bot.stop_bot()
-                    except ThreadInterruptedException:
-                        pass
+                        if bot.is_running():
+                            await bot.stop_bot()
                     except Exception as e:
-                        logger.debug(f"Ignored exception during monitor stop: {e}")
-                
-                loop.create_task(_monitor())
+                        loop_logger.debug(f"Exception during bot.stop_bot(): {e}")
+                    
+                    # Cancel the main run task if it's still alive
+                    if not bot_task.done():
+                        bot_task.cancel()
+
+                monitor_task = loop.create_task(_monitor_stop())
                 
                 try:
+                    # Wait for the main bot task to complete or be cancelled
                     loop.run_until_complete(bot_task)
                 except asyncio.CancelledError:
                     pass
+                except Exception as e:
+                    loop_logger.error(f"Unexpected error in bot task: {e}")
                 finally:
-                    loop.close()
-                    logger.info("Bot event loop closed.")
+                    # CRITICAL: Clean up ALL pending tasks before closing loop
+                    # This prevents "Task was destroyed but it is pending" and "Event loop is closed" errors
+                    loop_logger.info("Cleaning up pending tasks...")
+                    
+                    # 1. Cancel monitor task if it hasn't finished
+                    if not monitor_task.done():
+                        monitor_task.cancel()
+                    
+                    # 2. Identify all remaining tasks
+                    pending = [t for t in asyncio.all_tasks(loop) if not t.done()]
+                    
+                    if pending:
+                        loop_logger.debug(f"Cancelling {len(pending)} pending tasks...")
+                        for task in pending:
+                            task.cancel()
+                        
+                        # 3. Allow tasks a final chance to process cancellation/cleanup
+                        try:
+                            loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+                        except Exception as e:
+                            loop_logger.debug(f"Error during task gather: {e}")
+                    
+                    # 4. Final closure
+                    try:
+                        loop.run_until_complete(loop.shutdown_asyncgens())
+                        loop.close()
+                        loop_logger.info("Bot event loop closed successfully.")
+                    except Exception as e:
+                        loop_logger.warning(f"Error during loop closure: {e}")
             
             self.bot_thread = threading.Thread(
                 target=_start_bot_loop, 

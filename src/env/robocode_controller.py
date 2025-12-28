@@ -52,7 +52,7 @@ async def trigger_start(server_url, expected_bots=2):
                 "numberOfRounds": 1000,  # Many rounds for long training sessions
                 "gunCoolingRate": 0.1,
                 "maxInactivityTurns": 450,
-                "turnTimeout": 30000,
+                "turnTimeout": 100000,
                 "readyTimeout": 1000000,
                 "isArenaWidthLocked": False,
                 "isArenaHeightLocked": False,
