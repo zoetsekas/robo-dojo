@@ -2,7 +2,7 @@ import torch
 import os
 import argparse
 import logging
-from ray.rllib.algorithms.algorithm import Algorithm
+from ray.rllib.policy.policy import Policy
 from ray.rllib.models import ModelCatalog
 from src.models.multimodal_net import MultimodalRoboModel, VectorOnlyRoboModel
 
@@ -18,11 +18,10 @@ def export_checkpoint(checkpoint_path, output_path):
     ModelCatalog.register_custom_model("multimodal_robo_model", MultimodalRoboModel)
     ModelCatalog.register_custom_model("vector_only_robo_model", VectorOnlyRoboModel)
     
-    # Load the algorithm
-    algo = Algorithm.from_checkpoint(checkpoint_path)
-    
-    # Get the policy (assuming default_policy)
-    policy = algo.get_policy("default_policy")
+    # Load just the policy to avoid starting the whole algorithm/env
+    policy_path = os.path.abspath(os.path.join(checkpoint_path, "policies", "default_policy"))
+    logger.info(f"Loading policy from: {policy_path}")
+    policy = Policy.from_checkpoint(policy_path)
     
     # Extract the torch model
     model = policy.model

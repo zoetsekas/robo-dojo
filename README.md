@@ -86,39 +86,23 @@ sequenceDiagram
 
 ## 🚀 User Guide
 
-### 1. Prerequisites
-- Docker & Docker Compose
-- NVIDIA Container Toolkit (for GPU acceleration)
-- XLaunch (if using visual debugging on Windows)
+For detailed instructions on training, deploying, and playing with your bot, see the **[User Guide](USER_GUIDE.md)**.
 
-### 2. Getting Started
-The project uses a **Makefile** and **Hydra** for simplified management.
-
+### Quick Commands
 ```bash
-# Start full-scale training (12 parallel workers)
-make train
+# Validate environment
+make smoke-test-vector
 
-# Run a quick smoke test
-make smoke-test
+# Train a bot (vector-only, fastest)
+make train-vector
 
-# Monitor logs
-docker compose logs ray-head -f
+# Export and join a manual game
+make install-host          # One-time setup
+make export-vector-host    # Export weights
+make join-vector           # Join game at ws://127.0.0.1:7688
 ```
 
-### 3. Configuration (Hydra)
-Settings are organized hierarchically in `config/`. You can override any value via CLI:
-```bash
-# Override learning rate and worker count
-python -m src.train training.lr=1e-4 hardware.num_workers=5
-```
-
-### 4. Serving (Deployment)
-Once a model is trained, export and run it as a standalone bot:
-```bash
-# Export the best weights
-make serve
-# (This runs export_model.py and starts inference_bot.py)
-```
+Run `make help` for all available commands.
 
 ---
 

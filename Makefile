@@ -16,6 +16,8 @@ help:
 	@echo "  make export            - Convert the best checkpoint to standalone .pt"
 	@echo "  make serve             - Export AND start the inference bot"
 	@echo "  make serve-vector      - Serve with vector-only model"
+	@echo "  make join              - Join a manual game on host (localhost:7654)"
+	@echo "  make join-vector       - Join a manual game on host with vector-only bot"
 	@echo ""
 	@echo "EXPERT DATA COLLECTION:"
 	@echo "  make collect-expert    - Collect demonstration data from sample bots"
@@ -54,35 +56,67 @@ smoke-test-vector:
 	@echo "Running smoke test with VECTOR-ONLY observations..."
 	docker compose up smoke-test-vector --build
 
-# OS-specific venv path
+# OS-specific paths and commands
 ifeq ($(OS),Windows_NT)
+    PYTHON_EXE = py
     VENV_PATH = venv/Scripts/python
     PIP_PATH = venv/Scripts/pip
 else
+    PYTHON_EXE = python3
     VENV_PATH = venv/bin/python
     PIP_PATH = venv/bin/pip
 endif
 
 # 3. DEPLOYMENT
 venv:
-	@python -c "import os, subprocess; subprocess.run(['python', '-m', 'venv', 'venv']) if not os.path.exists('venv') else None"
+	@$(PYTHON_EXE) -c "import os, subprocess; subprocess.run(['$(PYTHON_EXE)', '-m', 'venv', 'venv']) if not os.path.exists('venv') else None"
 	@$(PIP_PATH) install -e .
+
+install-host: venv
+	@echo "Installing host-side dependencies from requirements.txt..."
+	powerShell -Command "$$env:PIP_CONFIG_FILE='pip.ini'; & $(PIP_PATH) install -r requirements.txt"
 
 export:
 	@echo "Exporting best model weights to artifacts/serving/bot_weights.pt..."
-	docker compose exec ray-head python src/serving/export_model.py --checkpoint artifacts/checkpoints/best
+	docker compose run --rm --no-deps ray-head python -m src.serving.export_model --checkpoint /app/artifacts/checkpoints/best
 
 export-vector:
 	@echo "Exporting vector-only model weights..."
-	docker compose exec ray-head python src/serving/export_model.py --checkpoint artifacts/checkpoints/best --vector-only
+	docker compose run --rm --no-deps ray-head python -m src.serving.export_model --checkpoint /app/artifacts/checkpoints/best --vector-only
 
-serve: venv export
-	@echo "Launching inference bot using venv..."
-	$(VENV_PATH) src/serving/inference_bot.py artifacts/serving/bot_weights.pt ws://127.0.0.1:7654 :99
+export-host: venv
+	@echo "Exporting weights on host (requires Ray in venv)..."
+	$(VENV_PATH) -m src.serving.export_model --checkpoint artifacts/checkpoints/best
 
-serve-vector: venv export-vector
+export-vector-host: venv
+	@echo "Exporting vector weights on host..."
+	$(VENV_PATH) -m src.serving.export_model --checkpoint artifacts/checkpoints/best --vector-only
+
+# Default serving params
+URL ?= ws://127.0.0.1:7688
+DISPLAY ?= :99
+WEIGHTS ?= artifacts/serving/bot_weights.pt
+
+serve: venv
+	@if not exist $(WEIGHTS) (echo "Weights not found. Exporting..." && make export)
+	@echo "Launching inference bot..."
+	$(VENV_PATH) -m src.serving.inference_bot $(WEIGHTS) $(URL) $(DISPLAY)
+
+serve-vector: venv
+	@if not exist $(WEIGHTS) (echo "Weights not found. Exporting..." && make export-vector)
 	@echo "Launching VECTOR-ONLY inference bot..."
-	$(VENV_PATH) src/serving/inference_bot.py artifacts/serving/bot_weights.pt ws://127.0.0.1:7654 :99 --vector-only
+	$(VENV_PATH) -m src.serving.inference_bot $(WEIGHTS) $(URL) $(DISPLAY) --vector-only
+
+# Join a manually started game on the host
+join: venv
+	@if not exist $(WEIGHTS) (echo "Weights not found. Exporting..." && make export)
+	@echo "Joining manual game on $(URL)..."
+	$(VENV_PATH) -m src.serving.inference_bot $(WEIGHTS) $(URL) $(DISPLAY)
+
+join-vector: venv
+	@if not exist $(WEIGHTS) (echo "Weights not found. Exporting..." && make export-vector)
+	@echo "Joining manual game on $(URL) [Vector-Only]..."
+	$(VENV_PATH) -m src.serving.inference_bot $(WEIGHTS) $(URL) $(DISPLAY) --vector-only
 
 
 # 4. DATA COLLECTION

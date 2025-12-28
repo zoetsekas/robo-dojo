@@ -7,6 +7,12 @@ import tempfile
 import shutil
 import logging
 
+try:
+    import mss
+    HAS_MSS = True
+except ImportError:
+    HAS_MSS = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -57,7 +63,10 @@ class VideoCapture:
         self._frame_cache_time = 0
         self._frame_cache_ttl = 0.05  # 20fps cache for RL
         
-        logger.info(f"VideoCapture initialized: display={display}, size={width}x{height}")
+        # Windows-specific mss instance
+        self.sct = mss.mss() if HAS_MSS and os.name == 'nt' else None
+        
+        logger.info(f"VideoCapture initialized: display={display}, size={width}x{height}, backend={'mss' if self.sct else 'X11'}")
 
     def grab_frame(self):
         """
@@ -72,65 +81,76 @@ class VideoCapture:
             return self._last_frame.copy()
         
         try:
-            env = os.environ.copy()
-            env["DISPLAY"] = self.display
-            
-            # Force focus on Robocode window using xdotool
-            window_id = self._get_robocode_window_id(env)
-            if window_id:
-                # Raise and focus the window to ensure it's visible
-                subprocess.run(
-                    ["xdotool", "windowactivate", "--sync", window_id],
-                    env=env, capture_output=True, timeout=1.0
-                )
-                subprocess.run(
-                    ["xdotool", "windowraise", window_id],
-                    env=env, capture_output=True, timeout=1.0
-                )
+            if self.sct:
+                # Windows/MSS path
+                monitor = self.sct.monitors[1]  # Capture primary monitor by default
+                screenshot = self.sct.grab(monitor)
+                frame = np.array(screenshot)
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+            else:
+                # Linux/X11 path
+                env = os.environ.copy()
+                env["DISPLAY"] = self.display
                 
-                # Capture specific window with xwd (better than import for some cases)
-                xwd_proc = subprocess.run(
-                    ["xwd", "-id", window_id, "-silent"],
-                    env=env, capture_output=True, timeout=2.0
-                )
-                if xwd_proc.returncode == 0 and xwd_proc.stdout:
-                    # Convert xwd to ppm
-                    convert_proc = subprocess.run(
-                        ["convert", "xwd:-", "ppm:-"],
-                        input=xwd_proc.stdout,
-                        capture_output=True, timeout=2.0
+                # Force focus on Robocode window using xdotool
+                window_id = self._get_robocode_window_id(env)
+                if window_id:
+                    # Raise and focus the window to ensure it's visible
+                    subprocess.run(
+                        ["xdotool", "windowactivate", "--sync", window_id],
+                        env=env, capture_output=True, timeout=1.0
                     )
-                    if convert_proc.returncode == 0 and convert_proc.stdout:
-                        result_stdout = convert_proc.stdout
+                    subprocess.run(
+                        ["xdotool", "windowraise", window_id],
+                        env=env, capture_output=True, timeout=1.0
+                    )
+                    
+                    # Capture specific window with xwd (better than import for some cases)
+                    xwd_proc = subprocess.run(
+                        ["xwd", "-id", window_id, "-silent"],
+                        env=env, capture_output=True, timeout=2.0
+                    )
+                    if xwd_proc.returncode == 0 and xwd_proc.stdout:
+                        # Convert xwd to ppm
+                        convert_proc = subprocess.run(
+                            ["convert", "xwd:-", "ppm:-"],
+                            input=xwd_proc.stdout,
+                            capture_output=True, timeout=2.0
+                        )
+                        if convert_proc.returncode == 0 and convert_proc.stdout:
+                            result_stdout = convert_proc.stdout
+                        else:
+                            result_stdout = None
                     else:
                         result_stdout = None
                 else:
-                    result_stdout = None
-            else:
-                # Fallback to root window with import
-                result = subprocess.run(
-                    ["import", "-window", "root", "-depth", "8", "ppm:-"],
-                    env=env,
-                    capture_output=True,
-                    timeout=2.0
-                )
-                result_stdout = result.stdout if result.returncode == 0 else None
+                    # Fallback to root window with import
+                    result = subprocess.run(
+                        ["import", "-window", "root", "-depth", "8", "ppm:-"],
+                        env=env,
+                        capture_output=True,
+                        timeout=2.0
+                    )
+                    result_stdout = result.stdout if result.returncode == 0 else None
+                
+                if result_stdout:
+                    frame = self._parse_ppm(result_stdout)
+                else:
+                    frame = None
             
-            if result_stdout:
-                frame = self._parse_ppm(result_stdout)
-                if frame is not None:
-                    # Resize if needed
-                    if frame.shape[:2] != (self.height, self.width):
-                        frame = cv2.resize(frame, (self.width, self.height))
-                    
-                    self._last_frame = frame
-                    self._frame_cache_time = current_time
-                    
-                    # Save frame if recording (with rate limiting)
-                    if self.recording and self.frames_dir:
-                        self._save_frame_if_needed(frame, current_time)
-                    
-                    return frame
+            if frame is not None:
+                # Resize if needed
+                if frame.shape[:2] != (self.height, self.width):
+                    frame = cv2.resize(frame, (self.width, self.height))
+                
+                self._last_frame = frame
+                self._frame_cache_time = current_time
+                
+                # Save frame if recording (with rate limiting)
+                if self.recording and self.frames_dir:
+                    self._save_frame_if_needed(frame, current_time)
+                
+                return frame
             
         except subprocess.TimeoutExpired:
             pass

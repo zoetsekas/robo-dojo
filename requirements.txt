@@ -1,0 +1,11 @@
+# Core dependencies for running the Robocode RL Inference Bot on host
+--extra-index-url https://download.pytorch.org/whl/cu130
+torchvision 
+torch
+numpy
+opencv-python
+mss
+websockets
+ray[rllib]
+# Ensure compatibility with the current server version (v0.34.1 recommended)
+robocode-tank-royale>=0.34.1

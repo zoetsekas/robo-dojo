@@ -88,7 +88,12 @@ class InferenceBot(Bot):
             self.model = MultimodalInferenceNet(vector_dim=37).to(self.device)
             self.video_capture = VideoCapture(display=display)
         
-        self.model.load_state_dict(torch.load(weights_path, map_location=self.device))
+        if not os.path.exists(weights_path):
+            logger.error(f"Weights file NOT FOUND: {weights_path}")
+            logger.info("Tip: Run 'make export' or 'make export-vector' first.")
+            sys.exit(1)
+
+        self.model.load_state_dict(torch.load(weights_path, map_location=self.device), strict=False)
         self.model.eval()
         
         # tracking state
@@ -100,6 +105,7 @@ class InferenceBot(Bot):
         self.combat_stats = {"bullets_fired": 0, "hits_dealt": 0, "damage_dealt": 0.0, "damage_taken": 0.0}
         
         logger.info(f"InferenceBot (Vector-Only: {vector_only}) initialised on {self.device}")
+        logger.info(f"Connecting to server: {server_url}")
 
     # --- Event Handlers for State Tracking ---
     async def on_scanned_bot(self, event: ScannedBotEvent):
@@ -158,7 +164,13 @@ class InferenceBot(Bot):
         return np.array(o_self + o_enemies + o_combat + [0.0, 0.0], dtype=np.float32)
 
     async def run(self):
+        tick_count = 0
+        total_inference_time = 0.0
+        import time
+        
         while self.is_running():
+            tick_start = time.perf_counter()
+            
             vector_obs = self._get_vector_obs()
             vec_tensor = torch.from_numpy(vector_obs).unsqueeze(0).to(self.device).float()
             
@@ -173,23 +185,46 @@ class InferenceBot(Bot):
                 
                 actions = outputs[:5]
             
-            self.target_speed = float(actions[0])
-            self.turn_rate = float(actions[1])
-            self.gun_turn_rate = float(actions[2])
-            self.radar_turn_rate = float(actions[3])
+            inference_time = time.perf_counter() - tick_start
+            total_inference_time += inference_time
+            tick_count += 1
+            
+            # Log every 100 ticks
+            if tick_count % 100 == 0:
+                avg_ms = (total_inference_time / tick_count) * 1000
+                logger.info(f"Tick {tick_count}: avg inference={avg_ms:.2f}ms, pos=({self.get_x():.0f},{self.get_y():.0f}), energy={self.get_energy():.1f}")
+            
+            # Scale outputs to game units (network outputs are typically -1 to 1)
+            self.target_speed = float(actions[0]) * 8.0        # Max speed is 8 units/tick
+            self.turn_rate = float(actions[1]) * 10.0          # Max turn rate
+            self.gun_turn_rate = float(actions[2]) * 20.0      # Max gun turn rate
+            self.radar_turn_rate = float(actions[3]) * 45.0    # Max radar turn rate
             
             if actions[4] > 0.1 and self.get_gun_heat() == 0:
-                await self.fire(max(0.1, min(3.0, float(actions[4]))))
+                await self.fire(max(0.1, min(3.0, abs(float(actions[4])) * 3.0)))
             
             await self.go()
 
 if __name__ == "__main__":
+    import os
     parser = argparse.ArgumentParser()
-    parser.add_argument("weights", type=str, default="artifacts/serving/bot_weights.pt")
-    parser.add_argument("url", type=str, default="ws://127.0.0.1:7654")
-    parser.add_argument("display", type=str, default=":99")
+    parser.add_argument("weights", type=str, nargs='?', default="artifacts/serving/bot_weights.pt")
+    parser.add_argument("url", type=str, nargs='?', default="ws://127.0.0.1:7654")
+    parser.add_argument("display", type=str, nargs='?', default=":99")
     parser.add_argument("--vector-only", action="store_true")
     args = parser.parse_args()
     
+    # Validation
+    if not os.path.exists(args.weights):
+        # Try finding it in current dir if relative path fails
+        alt_path = os.path.join(os.getcwd(), args.weights)
+        if not os.path.exists(alt_path):
+             logger.warning(f"Weights not found at {args.weights}. Trying to proceed anyway...")
+
     bot = InferenceBot(args.weights, args.url, args.display, vector_only=args.vector_only)
-    asyncio.run(bot.start())
+    try:
+        asyncio.run(bot.start())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user.")
+    except Exception as e:
+        logger.error(f"Bot exited with error: {e}")
