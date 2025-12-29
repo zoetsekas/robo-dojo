@@ -111,6 +111,7 @@ class RobocodeGymEnv(gym.Env):
         self._max_consecutive_timeouts = 3  # After this many, force full environment restart
         self._step_timeout_s = env_config.get("step_timeout_s", 5.0)  # Configurable timeout
         self._last_tick_time = time.time()  # Track bot responsiveness
+        self._episode_terminal_received = False  # Track if death/win/game_end received
         
         # Episode recorder (record every N episodes)
         record_every = env_config.get("record_every_n_episodes", 100)
@@ -170,6 +171,8 @@ class RobocodeGymEnv(gym.Env):
             time.sleep(2) # Give OS time to release ports/locks
 
         if self.use_xvfb:
+            # === XVFB SETUP (Steps 1-5) ===
+            
             # 1. Cleanup any stale lock files
             lock_file = f"/tmp/.X{self.display_num}-lock"
             if os.path.exists(lock_file):
@@ -177,10 +180,10 @@ class RobocodeGymEnv(gym.Env):
                 try: os.remove(lock_file)
                 except: pass
 
-            # 2. Xvfb - Run in background (1024x768 is more robust for Robocode)
-            # Disable MIT-SHM as it often causes issues in Docker
+            # 2. Start Xvfb (1024x768 is more robust for Robocode)
             # -ac: Disable access control checks
             # -nolisten tcp: Don't listen for TCP connections
+            # Disable MIT-SHM as it often causes issues in Docker
             xvfb_cmd = ["Xvfb", self.display_str, "-ac", "-screen", "0", "1024x768x24", "-nolisten", "tcp", "-extension", "MIT-SHM"]
             self.xvfb_proc = subprocess.Popen(xvfb_cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
             self.processes.append(self.xvfb_proc)
@@ -198,9 +201,8 @@ class RobocodeGymEnv(gym.Env):
                 except: pass
             threading.Thread(target=_log_xvfb, args=(self.xvfb_proc, self.display_str), daemon=True).start()
             
-            # Wait until Xvfb is actually responding
+            # 3. Wait until Xvfb is actually responding
             logger.info(f"Waiting for Xvfb on {self.display_str}...")
-            # Use xdpyinfo to wait for X server to be ready
             xvfb_ready = False
             for _ in range(30):
                 if subprocess.run(f"xdpyinfo -display {self.display_str}", shell=True, capture_output=True).returncode == 0:
@@ -212,24 +214,17 @@ class RobocodeGymEnv(gym.Env):
                 logger.error(f"Xvfb failed to start on {self.display_str}")
             else:
                 logger.info(f"X server is ready on {self.display_str}")
-        
-        # Set DISPLAY for the current worker process and its children
-        os.environ["DISPLAY"] = self.display_str
-        
-        # 1.5 Window Manager (Fluxbox) - Required for Java AWT to map windows correctly in Xvfb
-        if self.use_xvfb:
-            # We set DBUS and AT_BRIDGE to /dev/null to prevent Java hangs
+            
+            # 4. Start Window Manager (Fluxbox) - Required for Java AWT to map windows correctly
             wm_env = os.environ.copy()
             wm_env["DISPLAY"] = self.display_str
             wm_env["DBUS_SESSION_BUS_ADDRESS"] = "/dev/null"
             wm_env["NO_AT_BRIDGE"] = "1"
             
-            # Use fluxbox as it's often more stable for headless Java than openbox
             wm_cmd = ["fluxbox", "-display", self.display_str]
             self.wm_proc = subprocess.Popen(wm_cmd, env=wm_env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, preexec_fn=os.setsid)
             self.processes.append(self.wm_proc)
             
-            # Start WM logging thread
             def _log_wm(proc, disp):
                 try:
                     for line in iter(proc.stdout.readline, b''):
@@ -241,8 +236,7 @@ class RobocodeGymEnv(gym.Env):
             logger.info(f"Window manager (fluxbox) started on {self.display_str}")
             time.sleep(2)
             
-            # OPTIONAL: Start x11vnc for remote debugging (mapped via docker if port published)
-            # Use a unique port for each display if possible, but for smoke-test Display 100/101 is fine
+            # 5. Optional: Start x11vnc for remote debugging
             try:
                 vnc_port = 5900 + (self.display_num - 100)
                 vnc_cmd = ["x11vnc", "-display", self.display_str, "-forever", "-nopw", "-rfbport", str(vnc_port), "-shared"]
@@ -251,6 +245,9 @@ class RobocodeGymEnv(gym.Env):
                 logger.debug(f"VNC server started on port {vnc_port} for {self.display_str}")
             except Exception as e:
                 logger.warning(f"Failed to start VNC: {e}")
+        
+        # Set DISPLAY for the current worker process and its children (needed for both Xvfb and external display)
+        os.environ["DISPLAY"] = self.display_str
         
         # Essential for Java AWT to work correctly with non-reparenting WMs like Openbox/Fluxbox
         os.environ["_JAVA_AWT_WM_NONREPARENTING"] = "1"
@@ -724,6 +721,7 @@ class RobocodeGymEnv(gym.Env):
             self.bot.get_events()  # Drain queue
         
         self.last_event = None
+        self._episode_terminal_received = False  # Reset terminal flag for new episode
         logger.info(f"Episode {self.episode_count} started")
         return self._get_obs(), {}
 
@@ -771,12 +769,19 @@ class RobocodeGymEnv(gym.Env):
                 info["timeout"] = True
                 break
             
-            # Bot connection check
+            # Bot connection check with grace period for transient disconnects
             if not self.bot or not self.bot.is_running():
-                done = True
-                info["bot_disconnected"] = True
-                logger.warning("Bot disconnected during step")
-                break
+                # Brief grace period to handle transient WebSocket hiccups
+                time.sleep(0.05)
+                if not self.bot or not self.bot.is_running():
+                    done = True
+                    info["bot_disconnected"] = True
+                    # Distinguish expected vs unexpected disconnects
+                    if self._episode_terminal_received:
+                        logger.debug("Bot disconnected after terminal event (normal end-of-episode)")
+                    else:
+                        logger.warning(f"Bot disconnected unexpectedly at step {self.step_count}")
+                    break
 
             # Non-blocking event queue check
             if self.bot.event_queue.empty():
@@ -793,6 +798,9 @@ class RobocodeGymEnv(gym.Env):
                 tick_event = event
                 self._last_tick_time = time.time()
                 self._consecutive_timeouts = 0  # Reset timeout counter on successful tick
+                
+                # Survival bonus: reward for staying alive each tick
+                accumulated_reward += 0.01
                 
                 # Capture frame for visual observation
                 if self.video_capture:
@@ -825,15 +833,18 @@ class RobocodeGymEnv(gym.Env):
             elif event_type == "death":
                 done = True
                 accumulated_reward += -1.0
+                self._episode_terminal_received = True
                 break
                 
             elif event_type == "win":
                 done = True
                 accumulated_reward += 1.0
+                self._episode_terminal_received = True
                 break
 
             elif event_type in ["round_end", "game_end"]:
                 done = True
+                self._episode_terminal_received = True
                 logger.debug(f"Episode {self.episode_count} ended: {event_type}")
                 break
                 
@@ -843,16 +854,18 @@ class RobocodeGymEnv(gym.Env):
             elif event_type == "hit_wall":
                 accumulated_reward -= 0.1
             elif event_type == "bullet_hit":
-                accumulated_reward += 0.3  # Our bullet hit enemy
+                # Damage-scaled reward: base + bonus per damage point
+                damage = event.get("damage", 4)  # Default ~4 for power 1 bullet
+                accumulated_reward += 0.1 + (damage * 0.05)  # 0.1 base + ~0.2 per hit
                 # Update combat stats
                 self.combat_stats["hits_dealt"] += 1
-                self.combat_stats["damage_dealt"] += event.get("damage", 0)
+                self.combat_stats["damage_dealt"] += damage
             elif event_type == "hit_by_bullet":
                 accumulated_reward -= 0.2  # We got hit
                 # Update combat stats
                 self.combat_stats["damage_taken"] += event.get("damage", 0)
             elif event_type == "scanned":
-                accumulated_reward += 0.05  # Radar found enemy
+                accumulated_reward += 0.01  # Reduced from 0.05 to prevent farming
                 # Update multi-enemy tracking with scanned data
                 my_x = self.last_event.get("obs", {}).get("x", 0) if self.last_event else 0
                 my_y = self.last_event.get("obs", {}).get("y", 0) if self.last_event else 0

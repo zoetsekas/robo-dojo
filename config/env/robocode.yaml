@@ -7,16 +7,13 @@ record_every_n_episodes: 100
 
 # Opponent settings - "random" selects from opponent_pool each episode
 opponent_type: "random"         # Options: random, specific bot name (e.g., "Crazy", "simple_target")
-opponent_pool:                  # Pool for random selection (null = all available bots)
-  - Crazy
-  - Fire
-  - SpinBot
-  - RamFire
-  - TrackFire
-  - VelocityBot
-  - Walls
-  - Corners
-  - Target
+opponent_pool:                  # Pool for random selection (curriculum overrides this)
+  - Target                      # Stage 1.1 - stationary
+  - Walls                       # Stage 1.2 - predictable movement
+  - Corners                     # Stage 1.3 - corner camping
+  - RamFire                     # Stage 1.4 - aggressive ramming
+  - TrackFire                   # Stage 1.5 - tracking shooter  
+  - Crazy                       # Stage 1.6 - unpredictable movement
 num_opponents: 1                # Number of opponents per match
 
 num_envs_per_env_runner: 2

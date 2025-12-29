@@ -75,36 +75,57 @@ class TrainingCurriculum:
     
     @classmethod
     def default(cls) -> "TrainingCurriculum":
-        """Create curriculum with default Phase 1 stages."""
+        """Create curriculum with default Phase 1 stages (Java sample bots)."""
         stages = [
-            # Phase 1: Foundation Skills
+            # Phase 1: Foundation Skills - Java Sample Bots
             CurriculumStage(
-                name="1.1_stationary_target",
-                opponent="noop_bot.py",
+                name="1.1_target",
+                opponent="Target",  # Stationary target - easiest
+                min_iterations=100,
+                win_rate_milestone=0.9,
+                max_iterations=500,
+            ),
+            CurriculumStage(
+                name="1.2_walls",
+                opponent="Walls",  # Predictable wall-following
+                min_iterations=200,
+                win_rate_milestone=0.9,
+                max_iterations=1000,
+            ),
+            CurriculumStage(
+                name="1.3_corners",
+                opponent="Corners",  # Corner camping
+                min_iterations=300,
+                win_rate_milestone=0.9,
+                max_iterations=1500,
+            ),
+            CurriculumStage(
+                name="1.4_ramfire",
+                opponent="RamFire",  # Aggressive ramming
                 min_iterations=500,
-                win_rate_milestone=0.9,  # 90% threshold per user preference
+                win_rate_milestone=0.9,
                 max_iterations=2000,
             ),
             CurriculumStage(
-                name="1.2_simple_target",
-                opponent="simple_target.py",
-                min_iterations=2000,
-                win_rate_milestone=0.9,  # 90% threshold
-                max_iterations=10000,
+                name="1.5_trackfire",
+                opponent="TrackFire",  # Tracking shooter
+                min_iterations=500,
+                win_rate_milestone=0.9,
+                max_iterations=2000,
             ),
             CurriculumStage(
-                name="1.3_spinning_target",
-                opponent="simple_spin.py",
-                min_iterations=5000,
-                win_rate_milestone=0.9,  # 90% threshold
-                max_iterations=20000,
+                name="1.6_crazy",
+                opponent="Crazy",  # Unpredictable movement
+                min_iterations=1000,
+                win_rate_milestone=0.9,
+                max_iterations=5000,
             ),
             # Phase 2: Self-Play
             CurriculumStage(
                 name="2.1_self_play_basic",
                 opponent="self_play",
                 min_iterations=10000,
-                win_rate_milestone=0.55,  # Against league, 50% is baseline
+                win_rate_milestone=0.55,
                 max_iterations=0,  # No limit - continuous improvement
             ),
         ]
@@ -203,10 +224,10 @@ class TrainingCurriculum:
                 "stage": stage.name,
             }
         else:
+            # Java sample bot - just return the bot name
             return {
-                "type": "sample_bot",
-                "script": stage.opponent,
-                "path": f"/app/src/bots/{stage.opponent}",
+                "type": "java_bot",
+                "name": stage.opponent,  # e.g., "Target", "Walls", "Crazy"
                 "stage": stage.name,
             }
     

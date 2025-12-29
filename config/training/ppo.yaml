@@ -5,5 +5,5 @@ clip_param: 0.2
 entropy_coeff: 0.01
 vf_loss_coeff: 0.5
 num_epochs: 10
-train_batch_size: 65536
-minibatch_size: 4096
+train_batch_size: 16384
+minibatch_size: 2048
