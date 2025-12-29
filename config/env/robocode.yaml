@@ -24,3 +24,18 @@ sample_timeout_s: 600
 step_timeout_s: 5.0               # Timeout per step() call before truncating
 curriculum:
   90_percent_advancement: true
+
+# Game Setup (Robocode Server rules)
+game_setup:
+  game_type: "melee"
+  arena_width: 800
+  arena_height: 600
+  min_participants: 2
+  max_participants: 2   # null = unlimited
+  num_rounds: 1000
+  gun_cooling_rate: 0.1
+  max_inactivity_turns: 450
+  turn_timeout: 100000
+  ready_timeout: 1000000
+  default_turns_per_second: 30
+

@@ -1,4 +1,4 @@
-.PHONY: train train-resume train-selfplay train-vector train-vector-resume smoke-test smoke-test-vector export serve serve-vector collect-expert aggregate-data stop clean help
+.PHONY: train train-resume train-selfplay train-vector train-vector-resume smoke-test smoke-test-vector export serve serve-vector collect-expert aggregate-data stop clean tensorboard help
 
 # Default target
 help:
@@ -25,6 +25,7 @@ help:
 	@echo "  make aggregate-data    - Combine collected JSON data into .npz dataset"
 	@echo ""
 	@echo "UTILITIES:"
+	@echo "  make tensorboard       - Launch TensorBoard to view training metrics"
 	@echo "  make stop              - Stop the cluster (pauses training, keeps checkpoints)"
 	@echo "  make clean             - Stop cluster and WIPE temporary logs/checkpoints (DANGEROUS)"
 	@echo "-------------------------------------------------------------------"
@@ -134,7 +135,12 @@ aggregate-data:
 	@echo "Aggregating collected demonstrations..."
 	docker compose exec ray-head python src/aggregate_data.py
 
-# 5. CLEANUP
+# 5. MONITORING
+tensorboard:
+	@echo "Starting TensorBoard on http://localhost:6006..."
+	docker compose exec ray-head tensorboard --logdir=/app/artifacts/logs --host=0.0.0.0 --port=6006
+
+# 6. CLEANUP
 stop:
 	@echo "Stopping training cluster..."
 	docker compose stop

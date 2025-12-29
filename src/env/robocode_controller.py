@@ -8,7 +8,25 @@ import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [Controller] %(message)s', stream=sys.stderr)
 logger = logging.getLogger(__name__)
 
-async def trigger_start(server_url, expected_bots=2):
+# Default game setup values
+DEFAULT_GAME_SETUP = {
+    "game_type": "melee",
+    "arena_width": 800,
+    "arena_height": 600,
+    "min_participants": 2,
+    "max_participants": None,
+    "num_rounds": 1000,
+    "gun_cooling_rate": 0.1,
+    "max_inactivity_turns": 450,
+    "turn_timeout": 100000,
+    "ready_timeout": 1000000,
+    "default_turns_per_second": 30
+}
+
+async def trigger_start(server_url, expected_bots=2, game_setup_config=None):
+    # Merge provided config with defaults
+    cfg = {**DEFAULT_GAME_SETUP, **(game_setup_config or {})}
+    
     try:
         async with websockets.connect(server_url) as ws:
             # 1. Wait for Server Handshake
@@ -38,22 +56,20 @@ async def trigger_start(server_url, expected_bots=2):
                         break
                 await asyncio.sleep(0.5)
             
-            # 4. Send StartGame with proper gameSetup
+            # 4. Send StartGame with config-driven gameSetup
             bot_addresses = [{"host": b["host"], "port": b["port"]} for b in data["bots"]]
             
-            # Basic game setup for classic melee
-            # Use many rounds to keep game running during training
             game_setup = {
-                "gameType": "melee",
-                "arenaWidth": 800,
-                "arenaHeight": 600,
-                "minNumberOfParticipants": 2,
-                "maxNumberOfParticipants": None,
-                "numberOfRounds": 1000,  # Many rounds for long training sessions
-                "gunCoolingRate": 0.1,
-                "maxInactivityTurns": 450,
-                "turnTimeout": 100000,
-                "readyTimeout": 1000000,
+                "gameType": cfg["game_type"],
+                "arenaWidth": cfg["arena_width"],
+                "arenaHeight": cfg["arena_height"],
+                "minNumberOfParticipants": cfg["min_participants"],
+                "maxNumberOfParticipants": cfg["max_participants"],
+                "numberOfRounds": cfg["num_rounds"],
+                "gunCoolingRate": cfg["gun_cooling_rate"],
+                "maxInactivityTurns": cfg["max_inactivity_turns"],
+                "turnTimeout": cfg["turn_timeout"],
+                "readyTimeout": cfg["ready_timeout"],
                 "isArenaWidthLocked": False,
                 "isArenaHeightLocked": False,
                 "isMinNumberOfParticipantsLocked": False,
@@ -63,7 +79,7 @@ async def trigger_start(server_url, expected_bots=2):
                 "isMaxInactivityTurnsLocked": False,
                 "isTurnTimeoutLocked": False,
                 "isReadyTimeoutLocked": False,
-                "defaultTurnsPerSecond": 30
+                "defaultTurnsPerSecond": cfg["default_turns_per_second"]
             }
             
             await ws.send(json.dumps({
@@ -71,7 +87,7 @@ async def trigger_start(server_url, expected_bots=2):
                 "gameSetup": game_setup,
                 "botAddresses": bot_addresses
             }))
-            logger.info(f"Match triggered successfully with {len(bots)} bots.")
+            logger.info(f"Match triggered with config: {cfg['game_type']}, arena {cfg['arena_width']}x{cfg['arena_height']}, min_participants={cfg['min_participants']}")
             
             # 5. Wait for GameStarted
             while True:
@@ -92,5 +108,13 @@ async def trigger_start(server_url, expected_bots=2):
 if __name__ == "__main__":
     url = sys.argv[1] if len(sys.argv) > 1 else "ws://127.0.0.1:7654"
     num_bots = int(sys.argv[2]) if len(sys.argv) > 2 else 2
-    asyncio.run(trigger_start(url, num_bots))
+    game_setup_json = sys.argv[3] if len(sys.argv) > 3 else "{}"
+    
+    try:
+        game_setup_config = json.loads(game_setup_json)
+    except json.JSONDecodeError:
+        logger.warning(f"Invalid game_setup JSON, using defaults: {game_setup_json}")
+        game_setup_config = {}
+    
+    asyncio.run(trigger_start(url, num_bots, game_setup_config))
 

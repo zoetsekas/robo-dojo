@@ -57,7 +57,7 @@ class CurriculumCallback(RLlibCallback):
         metrics_logger=None,
         **kwargs
     ) -> None:
-        """Track episode outcomes for win rate calculation."""
+        """Track episode outcomes and detailed game metrics for TensorBoard."""
         # Handle both old (total_reward) and new (get_return()) APIs
         if hasattr(episode, 'get_return'):
             episode_return = episode.get_return()
@@ -75,6 +75,39 @@ class CurriculumCallback(RLlibCallback):
         # Keep only recent outcomes
         if len(self.episode_outcomes) > self.win_rate_window:
             self.episode_outcomes = self.episode_outcomes[-self.win_rate_window:]
+        
+        # Extract detailed game metrics from episode info (if available)
+        if metrics_logger:
+            # Get last info dict from episode
+            last_info = {}
+            if hasattr(episode, 'get_infos'):
+                infos = episode.get_infos()
+                if infos:
+                    last_info = infos[-1] if isinstance(infos, list) else infos
+            elif hasattr(episode, 'last_info_for'):
+                try:
+                    last_info = episode.last_info_for() or {}
+                except:
+                    pass
+            
+            # Log combat metrics if available
+            if "damage_dealt" in last_info:
+                metrics_logger.log_value("game/damage_dealt", float(last_info["damage_dealt"]), reduce="mean")
+            if "damage_taken" in last_info:
+                metrics_logger.log_value("game/damage_taken", float(last_info["damage_taken"]), reduce="mean")
+            if "bullets_fired" in last_info:
+                metrics_logger.log_value("game/bullets_fired", float(last_info["bullets_fired"]), reduce="mean")
+            if "hits_dealt" in last_info:
+                metrics_logger.log_value("game/hits_dealt", float(last_info["hits_dealt"]), reduce="mean")
+            if "energy_remaining" in last_info:
+                metrics_logger.log_value("game/energy_remaining", float(last_info["energy_remaining"]), reduce="mean")
+            if "episode_length" in last_info:
+                metrics_logger.log_value("game/episode_length", float(last_info["episode_length"]), reduce="mean")
+            
+            # Calculate and log accuracy if we have both bullets and hits
+            if last_info.get("bullets_fired", 0) > 0:
+                accuracy = last_info.get("hits_dealt", 0) / last_info["bullets_fired"]
+                metrics_logger.log_value("game/accuracy", accuracy, reduce="mean")
     
     def on_train_result(self, *, algorithm, metrics_logger, result: Dict[str, Any], **kwargs) -> None:
         """Check curriculum progression after each training iteration."""

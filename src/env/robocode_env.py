@@ -35,6 +35,9 @@ class RobocodeGymEnv(gym.Env):
         self.num_opponents = env_config.get("num_opponents", 1)
         self.opponent_pool = env_config.get("opponent_pool", None)  # None = all bots
         
+        # Game setup config (passed to controller)
+        self.game_setup = env_config.get("game_setup", {})
+        
         # 1. Port/Display allocation based on worker and vector index
         # Using a wider range to avoid collisions
         self.port = 8000 + (worker_idx * 10) + (vector_idx * 2)
@@ -685,7 +688,9 @@ class RobocodeGymEnv(gym.Env):
             logger.info(f"Starting match controller (Total Bots: {total_bots})")
             def _run_controller():
                 try:
-                    cmd = ["python", "-m", "src.env.robocode_controller", self.server_url, str(total_bots)]
+                    import json
+                    game_setup_json = json.dumps(self.game_setup) if self.game_setup else "{}"
+                    cmd = ["python", "-m", "src.env.robocode_controller", self.server_url, str(total_bots), game_setup_json]
                     subprocess.run(cmd, capture_output=True, text=True)
                 except Exception as e:
                     logger.error(f"Controller error: {e}")
@@ -820,13 +825,11 @@ class RobocodeGymEnv(gym.Env):
             elif event_type == "death":
                 done = True
                 accumulated_reward += -1.0
-                logger.info(f"Episode {self.episode_count} ended: DEATH after {self.step_count} steps, reward={self.total_reward:.2f}")
                 break
                 
             elif event_type == "win":
                 done = True
                 accumulated_reward += 1.0
-                logger.info(f"Episode {self.episode_count} ended: WIN after {self.step_count} steps, reward={self.total_reward:.2f}")
                 break
 
             elif event_type in ["round_end", "game_end"]:
@@ -837,21 +840,17 @@ class RobocodeGymEnv(gym.Env):
             # Accumulate intermediate rewards (these continue to tick)
             elif event_type == "hit_bot":
                 accumulated_reward += 0.5
-                logger.info(f"[Step {self.step_count}] COLLISION: Hit bot {event.get('victim_id')}!")
             elif event_type == "hit_wall":
                 accumulated_reward -= 0.1
-                logger.debug(f"[Step {self.step_count}] Wall hit")
             elif event_type == "bullet_hit":
                 accumulated_reward += 0.3  # Our bullet hit enemy
                 # Update combat stats
                 self.combat_stats["hits_dealt"] += 1
                 self.combat_stats["damage_dealt"] += event.get("damage", 0)
-                logger.info(f"[Step {self.step_count}] ATTACK: Bullet hit enemy {event.get('victim_id')} (Damage: {event.get('damage', 0):.1f})")
             elif event_type == "hit_by_bullet":
                 accumulated_reward -= 0.2  # We got hit
                 # Update combat stats
                 self.combat_stats["damage_taken"] += event.get("damage", 0)
-                logger.info(f"[Step {self.step_count}] DEFENSE: Hit by bullet (Damage: {event.get('damage', 0):.1f})")
             elif event_type == "scanned":
                 accumulated_reward += 0.05  # Radar found enemy
                 # Update multi-enemy tracking with scanned data
@@ -892,16 +891,18 @@ class RobocodeGymEnv(gym.Env):
         # Update tracking
         self.step_count += 1
         self.total_reward += accumulated_reward
-        
-        # Periodic step log for progress tracking
-        if self.step_count % 100 == 0:
-            energy = 0
-            if tick_event:
-                energy = tick_event.get("obs", {}).get("energy", 0)
-            logger.info(f"Episode {self.episode_count} Step {self.step_count}: Reward={self.total_reward:.2f}, Energy={energy:.1f}")
             
         info["events_processed"] = events_processed
         info["step_time"] = time.time() - start_wait
+        
+        # Add combat metrics for TensorBoard logging
+        info["damage_dealt"] = self.combat_stats["damage_dealt"]
+        info["damage_taken"] = self.combat_stats["damage_taken"]
+        info["bullets_fired"] = self.combat_stats["bullets_fired"]
+        info["hits_dealt"] = self.combat_stats["hits_dealt"]
+        info["episode_length"] = self.step_count
+        if tick_event:
+            info["energy_remaining"] = tick_event.get("obs", {}).get("energy", 0)
         
         # Collection and Export logic
         if self.export_tick_data and tick_event:

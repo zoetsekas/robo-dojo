@@ -23,16 +23,12 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [Train] %(message)s'
 logger = logging.getLogger(__name__)
 
 
-class MinimalLogger(Logger):
-    """A logger that does nothing to avoid deprecation warnings from UnifiedLogger."""
-    def _init(self): pass
-    def on_result(self, result): pass
-    def close(self): pass
-    def flush(self): pass
-
-
-def custom_logger_creator(config):
-    return MinimalLogger(config, tempfile.mkdtemp(prefix="robodojo_log_"))
+def tensorboard_logger_creator(config):
+    """Create a TensorBoard logger that writes to artifacts/logs."""
+    from ray.tune.logger import UnifiedLogger
+    log_dir = os.path.join("/app/artifacts/logs", config.get("env", "robodojo"))
+    os.makedirs(log_dir, exist_ok=True)
+    return UnifiedLogger(config, log_dir, loggers=None)  # Uses TBX by default
 
 
 def create_callbacks(cfg: DictConfig):
@@ -134,16 +130,13 @@ def main(cfg: DictConfig):
 
     # Build algorithm
     logger.info("Building PPO algorithm...")
-    algo = config.build_algo(logger_creator=custom_logger_creator)
+    algo = config.build_algo(logger_creator=tensorboard_logger_creator)
 
     # Resume from checkpoint if specified
     if cfg.resume:
-        resume_path = Path(cfg.resume).resolve()
-        # RLlib's restore() prefers URIs for absolute local paths to avoid PyArrow issues
-        resume_uri = resume_path.as_uri() if resume_path.exists() else str(resume_path)
-        
-        logger.info(f"Resuming from checkpoint: {resume_uri}")
-        algo.restore(resume_uri)
+        resume_path = str(Path(cfg.resume).resolve())
+        logger.info(f"Resuming from checkpoint: {resume_path}")
+        algo.restore(resume_path)
 
     # Training loop
     logger.info("\nStarting training loop...")
