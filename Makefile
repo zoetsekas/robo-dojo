@@ -1,16 +1,17 @@
-.PHONY: train train-resume train-selfplay train-vector smoke-test smoke-test-vector export serve serve-vector collect-expert aggregate-data stop clean help
+.PHONY: train train-resume train-selfplay train-vector train-vector-resume smoke-test smoke-test-vector export serve serve-vector collect-expert aggregate-data stop clean help
 
 # Default target
 help:
 	@echo "RoboDojo Makefile Command Reference:"
 	@echo "-------------------------------------------------------------------"
 	@echo "TRAINING SCENARIOS:"
-	@echo "  make train             - Start training from scratch (full cluster)"
-	@echo "  make train-resume      - Resume training from the best checkpoint"
-	@echo "  make train-selfplay    - Start training with self-play only"
-	@echo "  make train-vector      - Train with VECTOR-ONLY obs (no visual)"
-	@echo "  make smoke-test        - Run a quick validation test (multimodal)"
-	@echo "  make smoke-test-vector - Run a quick validation test (vector-only)"
+	@echo "  make train               - Start training from scratch (full cluster)"
+	@echo "  make train-resume        - Resume training from the best checkpoint"
+	@echo "  make train-selfplay      - Start training with self-play only"
+	@echo "  make train-vector        - Train with VECTOR-ONLY obs (no visual)"
+	@echo "  make train-vector-resume - Resume VECTOR-ONLY training from checkpoint"
+	@echo "  make smoke-test          - Run a quick validation test (multimodal)"
+	@echo "  make smoke-test-vector   - Run a quick validation test (vector-only)"
 	@echo ""
 	@echo "SERVING & DEPLOYMENT:"
 	@echo "  make export            - Convert the best checkpoint to standalone .pt"
@@ -46,6 +47,11 @@ train-selfplay:
 train-vector: export TRAIN_ARGS=env.use_visual_obs=false
 train-vector:
 	@echo "Starting VECTOR-ONLY training (no visual observations)..."
+	docker compose up ray-head ray-worker -d --build
+
+train-vector-resume: export TRAIN_ARGS=resume=artifacts/checkpoints/best env.use_visual_obs=false
+train-vector-resume:
+	@echo "Resuming VECTOR-ONLY training from best checkpoint..."
 	docker compose up ray-head ray-worker -d --build
 
 # 2. SMOKE TESTS

@@ -16,6 +16,7 @@ from ray.tune.logger import Logger
 import tempfile
 import logging
 from tqdm import tqdm
+from pathlib import Path
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [Train] %(message)s')
@@ -137,8 +138,12 @@ def main(cfg: DictConfig):
 
     # Resume from checkpoint if specified
     if cfg.resume:
-        logger.info(f"Resuming from checkpoint: {cfg.resume}")
-        algo.restore(cfg.resume)
+        resume_path = Path(cfg.resume).resolve()
+        # RLlib's restore() prefers URIs for absolute local paths to avoid PyArrow issues
+        resume_uri = resume_path.as_uri() if resume_path.exists() else str(resume_path)
+        
+        logger.info(f"Resuming from checkpoint: {resume_uri}")
+        algo.restore(resume_uri)
 
     # Training loop
     logger.info("\nStarting training loop...")
