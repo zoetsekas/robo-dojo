@@ -26,9 +26,11 @@ logger = logging.getLogger(__name__)
 def tensorboard_logger_creator(config):
     """Create a TensorBoard logger that writes to artifacts/logs."""
     from ray.tune.logger import UnifiedLogger
-    log_dir = os.path.join("/app/artifacts/logs", config.get("env", "robodojo"))
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_dir = f"/app/artifacts/logs/robodojo_{timestamp}"
     os.makedirs(log_dir, exist_ok=True)
-    return UnifiedLogger(config, log_dir, loggers=None)  # Uses TBX by default
+    return UnifiedLogger(config, log_dir)
 
 
 def create_callbacks(cfg: DictConfig):

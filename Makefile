@@ -138,7 +138,7 @@ aggregate-data:
 # 5. MONITORING
 tensorboard:
 	@echo "Starting TensorBoard on http://localhost:6006..."
-	docker compose exec ray-head tensorboard --logdir=/app/artifacts/logs --host=0.0.0.0 --port=6006
+	docker compose exec ray-head tensorboard --logdir=/app/artifacts/logs:/root/ray_results --host=0.0.0.0 --port=6006
 
 # 6. CLEANUP
 stop:
